@@ -1,7 +1,7 @@
+# Source: https://github.com/tkipf/gae/blob/master/gae/preprocessing.py
+
 import numpy as np
 import scipy.sparse as sp
-
-# Source: https://github.com/tkipf/gae/blob/master/gae/preprocessing.py
 
 def sparse_to_tuple(sparse_mx):
     if not sp.isspmatrix_coo(sparse_mx):
@@ -29,7 +29,7 @@ def mask_test_edges(adj):
     num_test = int(np.floor(edges.shape[0] / 10.))
     num_val = int(np.floor(edges.shape[0] / 20.))
 
-    all_edge_idx = range(edges.shape[0])
+    all_edge_idx = np.arange(edges.shape[0])
     np.random.shuffle(all_edge_idx)
     val_edge_idx = all_edge_idx[:num_val]
     test_edge_idx = all_edge_idx[num_val:(num_val + num_test)]
