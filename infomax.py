@@ -6,12 +6,19 @@ import torch.nn.functional as F
 from torch_geometric.datasets import Planetoid
 from torch_geometric.nn import GCNConv
 from torch_geometric.nn.inits import uniform
+import networkx as nx
+
+from preprocessing import mask_test_edges
 
 hidden_dim = 512
 
 dataset = 'Cora'
 path = osp.join(osp.dirname(osp.realpath(__file__)), 'data', dataset)
 data = Planetoid(path, dataset)[0]
+
+# Obtain edges for the link prediction task
+adj = nx.adjacency_matrix(nx.from_edgelist(data.edge_index.numpy().T))
+adj_train, train_edges, val_edges, val_edges_false, test_edges, test_edges_false = mask_test_edges(adj)
 
 
 class Encoder(nn.Module):
