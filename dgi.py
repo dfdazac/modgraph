@@ -13,14 +13,14 @@ class Encoder(nn.Module):
         self.conv = GCNConv(input_dim, hidden_dim)
         self.prelu = nn.PReLU(hidden_dim)
 
-    def forward(self, data, corrupt=False):
+    def forward(self, data, edge_index, corrupt=False):
         if corrupt:
             perm = torch.randperm(data.num_nodes)
             x = data.x[perm]
         else:
             x = data.x
 
-        x = self.conv(x, data.edge_index)
+        x = self.conv(x, edge_index)
         x = self.prelu(x)
         return x
 
@@ -46,8 +46,8 @@ class Infomax(nn.Module):
         self.loss = nn.BCEWithLogitsLoss()
 
     def forward(self, data):
-        positive = self.encoder(data, corrupt=False)
-        negative = self.encoder(data, corrupt=True)
+        positive = self.encoder(data, data.edge_index, corrupt=False)
+        negative = self.encoder(data, data.edge_index, corrupt=True)
         summary = torch.sigmoid(positive.mean(dim=0))
 
         positive = self.discriminator(positive, summary)
@@ -68,7 +68,7 @@ class Classifier(nn.Module):
         self.lin.reset_parameters()
 
     def forward(self, data):
-        x = self.encoder(data, corrupt=False)
+        x = self.encoder(data, data.edge_index, corrupt=False)
         x = x.detach()
         x = self.lin(x)
         return torch.log_softmax(x, dim=-1)
@@ -99,7 +99,7 @@ def main():
     infomax_optimizer = torch.optim.Adam(infomax.parameters(), lr=0.001)
 
     print('Train deep graph infomax.')
-    epochs = 300
+    epochs = 2
     for epoch in range(1, epochs + 1):
         loss = train_infomax(epoch)
         print('Epoch: {:03d}, Loss: {:.7f}'.format(epoch, loss))
