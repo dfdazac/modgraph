@@ -7,6 +7,8 @@ from torch_geometric.datasets import Planetoid
 from torch_geometric.nn import GCNConv
 from torch_geometric.nn.inits import uniform
 import networkx as nx
+import numpy as np
+from sklearn.metrics import roc_auc_score, average_precision_score
 
 from preprocessing import mask_test_edges
 
@@ -15,10 +17,6 @@ hidden_dim = 512
 dataset = 'Cora'
 path = osp.join(osp.dirname(osp.realpath(__file__)), 'data', dataset)
 data = Planetoid(path, dataset)[0]
-
-# Obtain edges for the link prediction task
-adj = nx.adjacency_matrix(nx.from_edgelist(data.edge_index.numpy().T))
-adj_train, train_edges, val_edges, val_edges_false, test_edges, test_edges_false = mask_test_edges(adj)
 
 
 class Encoder(nn.Module):
@@ -94,9 +92,50 @@ def train_infomax(epoch):
 
 
 print('Train deep graph infomax.')
-for epoch in range(1, 301):
+epochs = 1 #300
+for epoch in range(1, epochs + 1):
     loss = train_infomax(epoch)
     print('Epoch: {:03d}, Loss: {:.7f}'.format(epoch, loss))
+
+
+def get_roc_score(edges_pos, edges_neg, emb):
+    def sigmoid(x):
+        return 1 / (1 + np.exp(-x))
+
+    # Predict on test set of edges
+    adj_pred = np.dot(emb, emb.T)
+    preds = []
+    pos = []
+    for e in edges_pos:
+        preds.append(sigmoid(adj_pred[e[0], e[1]]))
+        pos.append(adj_orig[e[0], e[1]])
+
+    preds_neg = []
+    neg = []
+    for e in edges_neg:
+        preds_neg.append(sigmoid(adj_pred[e[0], e[1]]))
+        neg.append(adj_orig[e[0], e[1]])
+
+    preds_all = np.hstack([preds, preds_neg])
+    labels_all = np.hstack([np.ones(len(preds)), np.zeros(len(preds))])
+    roc_score = roc_auc_score(labels_all, preds_all)
+    ap_score = average_precision_score(labels_all, preds_all)
+
+    return roc_score, ap_score
+
+# Obtain edges for the link prediction task
+adj = nx.adjacency_matrix(nx.from_edgelist(data.edge_index.numpy().T))
+adj_orig = adj
+adj_train, train_edges, val_edges, val_edges_false, test_edges, test_edges_false = mask_test_edges(adj)
+
+emb = infomax.encoder(data.x, data.edge_index).detach().numpy()
+
+roc_score, ap_score = get_roc_score(val_edges, val_edges_false, emb)
+print('val_roc = {:.3f} val_ap = {:.3f}'.format(roc_score, ap_score))
+
+roc_score, ap_score = get_roc_score(test_edges, test_edges_false, emb)
+print('test_roc = {:.3f} test_ap = {:.3f}'.format(roc_score, ap_score))
+
 
 
 class Classifier(nn.Module):
@@ -146,3 +185,4 @@ for epoch in range(1, 51):
     accs = test_classifier()
     log = 'Epoch: {:02d}, Train: {:.4f}, Val: {:.4f}, Test: {:.4f}'
     print(log.format(epoch, *accs))
+
