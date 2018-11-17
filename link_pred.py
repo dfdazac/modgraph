@@ -1,4 +1,5 @@
 import os.path as osp
+from argparse import ArgumentParser
 
 from torch_geometric.datasets import Planetoid
 import numpy as np
@@ -10,7 +11,8 @@ from models import *
 def print_stats(roc_results, ap_results):
     splits = ['train', 'val', 'test']
 
-    for i, split in enumerate(splits):
+    for i in [1, 2]:
+        split = splits[i]
         print(f'{split} results:')
         roc_mean = np.mean(roc_results[i])
         roc_std = np.std(roc_results[i])
@@ -102,4 +104,10 @@ def main(model_name, n_experiments, epochs):
     print_stats(roc_results, ap_results)
 
 if __name__ == '__main__':
-    main('bilinear', n_experiments=10, epochs=100)
+    parser = ArgumentParser()
+    parser.add_argument('model', help='Model name',
+                        choices=['dot', 'bilinear'])
+    arg_vars = vars(parser.parse_args())
+    model_name = arg_vars['model']
+
+    main(model_name, n_experiments=2, epochs=2)

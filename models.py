@@ -71,7 +71,7 @@ class NodeClassifier(nn.Module):
         return torch.log_softmax(x, dim=-1)
 
 class DotLinkPredictor(nn.Module):
-    def __init__(self, **kwargs):
+    def __init__(self, *args):
         super(DotLinkPredictor, self).__init__()
 
     def forward(self, emb):

@@ -97,7 +97,7 @@ def get_roc_scores(adj_pred, adj_orig, edges_pos=None, edges_neg=None):
     def sigmoid(x):
         return 1 / (1 + np.exp(-x))
 
-    if edges_pos is None and edges_neg is None:
+    if edges_pos is not None and edges_neg is not None:
         # Evaluate performance on predicted adjacency matr
         # Predict on test set of edges
         preds = []
