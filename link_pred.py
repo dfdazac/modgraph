@@ -1,12 +1,13 @@
 import os.path as osp
 from argparse import ArgumentParser
 
+import torch
 from torch_geometric.datasets import Planetoid
 import numpy as np
 import networkx as nx
 
 from utils import mask_test_edges, get_roc_scores
-from models import *
+from models import Infomax, BilinearLinkPredictor, DotLinkPredictor
 
 def print_stats(roc_results, ap_results):
     splits = ['train', 'val', 'test']
