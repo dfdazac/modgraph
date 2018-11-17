@@ -1,122 +1,105 @@
 import os.path as osp
-import math
-import torch
-import torch.nn as nn
+
 from torch_geometric.datasets import Planetoid
 import numpy as np
-from sklearn.metrics import roc_auc_score, average_precision_score
 import networkx as nx
 
-from preprocessing import mask_test_edges
-from models import Infomax
+from utils import mask_test_edges, get_roc_scores
+from models import *
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+def print_stats(roc_results, ap_results):
+    splits = ['train', 'val', 'test']
 
-# Load data
-dataset = 'Cora'
-path = osp.join(osp.dirname(osp.realpath(__file__)), 'data', dataset)
-data = Planetoid(path, dataset)[0]
-data = data.to(device)
+    for i, split in enumerate(splits):
+        print(f'{split} results:')
+        roc_mean = np.mean(roc_results[i])
+        roc_std = np.std(roc_results[i])
+        ap_mean = np.mean(ap_results[i])
+        ap_std = np.std(ap_results[i])
+        print('\troc = {:.3f} ± {:.3f}, ap = {:.3f} ± {:.3f}'.format(roc_mean,
+            roc_std, ap_mean, ap_std))
 
-# Load pretrained DGI model
-emb_dim = 512
-infomax = Infomax(data.num_features, emb_dim).to(device)
-infomax.load_state_dict(torch.load('dgi.p'))
 
-def get_roc_score(edges_pos, edges_neg, adj_pred):
-    def sigmoid(x):
-        return 1 / (1 + np.exp(-x))
+def main(model_name, n_experiments, epochs):
+    print(f'Link prediction model: {model_name}')
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    # Predict on test set of edges
-    preds = []
-    pos = []
-    for e in edges_pos:
-        preds.append(sigmoid(adj_pred[e[0], e[1]]))
-        pos.append(adj_orig[e[0], e[1]])
+    if model_name == 'bilinear':
+        model_class = BilinearLinkPredictor
+    elif model_name == 'dot':
+        model_class = DotLinkPredictor
+    else:
+        raise ValueError(f'Invalid model name {model_name}')
 
-    preds_neg = []
-    neg = []
-    for e in edges_neg:
-        preds_neg.append(sigmoid(adj_pred[e[0], e[1]]))
-        neg.append(adj_orig[e[0], e[1]])
+    # Load data
+    dataset = 'Cora'
+    path = osp.join(osp.dirname(osp.realpath(__file__)), 'data', dataset)
+    data = Planetoid(path, dataset)[0]
+    data = data.to(device)
 
-    preds_all = np.hstack([preds, preds_neg])
-    labels_all = np.hstack([np.ones(len(preds)), np.zeros(len(preds))])
-    roc_score = roc_auc_score(labels_all, preds_all)
-    ap_score = average_precision_score(labels_all, preds_all)
+    # Load pretrained DGI model
+    emb_dim = 512
+    infomax = Infomax(data.num_features, emb_dim).to(device)
+    infomax.load_state_dict(torch.load(osp.join('saved', 'dgi.p')))
+    infomax.eval()
 
-    return roc_score, ap_score
+    roc_results = np.empty([3, n_experiments], dtype=np.float)
+    ap_results = np.empty([3, n_experiments], dtype=np.float)
 
-n_experiments = 10
-dot_predictor_roc = []
-dot_predictor_ap = []
-bi_predictor_roc = []
-bi_predictor_ap = []
+    for exper in range(n_experiments):
+        print('Experiment {:d}'.format(exper + 1))
+        # Obtain edges for the link prediction task
+        adj = nx.adjacency_matrix(nx.from_edgelist(data.edge_index.numpy().T))
+        adj_orig = adj
 
-for i in range(n_experiments):
-    # Obtain edges for the link prediction task
-    adj = nx.adjacency_matrix(nx.from_edgelist(data.edge_index.numpy().T))
-    adj_orig = adj
-    adj_train, train_edges, val_edges, val_edges_false, test_edges, test_edges_false = mask_test_edges(adj)
+        # Sometimes the assertions in mask_test_edges fail, so we try again
+        while True:
+            try:
+                adj_train, train_edges, val_edges, val_edges_false, test_edges, test_edges_false = mask_test_edges(adj)
+                break
+            except AssertionError:
+                continue
 
-    adj_train = torch.tensor(adj_train.toarray(), dtype=torch.float32)
-    train_edges = torch.tensor(train_edges, dtype=torch.long)
+        adj_train = torch.tensor(adj_train.toarray(), dtype=torch.float32)
+        train_edges = torch.tensor(train_edges, dtype=torch.long)
 
-    emb = infomax.encoder(data, train_edges.t()).detach()
-    adj_pred = torch.sigmoid(torch.matmul(emb, emb.t())).numpy()
+        # Encode graph
+        emb = infomax.encoder(data, train_edges.t()).detach()
 
-    print('Results with dot product predictor:')
-    roc_score, ap_score = get_roc_score(val_edges, val_edges_false, adj_pred)
-    print('val_roc = {:.3f} val_ap = {:.3f}'.format(roc_score, ap_score))
+        model = model_class(emb_dim)
+        adj_pred = model(emb)
 
-    roc_score, ap_score = get_roc_score(test_edges, test_edges_false, adj_pred)
-    print('test_roc = {:.3f} test_ap = {:.3f}'.format(roc_score, ap_score))
+        if model_name != 'dot':
+            pos_weight = float(adj_train.shape[0] * adj_train.shape[0] - adj_train.sum()) / adj_train.sum()
+            binary_loss = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+            optimizer = torch.optim.Adam(model.parameters())
 
-    dot_predictor_roc.append(roc_score)
-    dot_predictor_ap.append(ap_score)
+            for epoch in range(1, epochs + 1):
+                optimizer.zero_grad()
+                adj_pred = model(emb)
+                loss = binary_loss(adj_pred, adj_train)
+                loss.backward()
+                optimizer.step()
 
-    class LinkPredictor(nn.Module):
-        def __init__(self, emb_dim):
-            super(LinkPredictor, self).__init__()
+                adj_pred = adj_pred.detach().numpy()
+                roc_score, ap_score = get_roc_scores(adj_pred, adj_orig,
+                                        val_edges, val_edges_false)
+                log = '\rEpoch {:03d}/{:03d} loss = {:.4f} val_roc = {:.3f} val_ap = {:.3f}'
+                print(log.format(epoch, epochs, loss.item(), roc_score, ap_score), end='',
+                      flush=True)
+            print()
 
-            self.weight = nn.Parameter(torch.Tensor(emb_dim, emb_dim))
-            stdv = 1. / math.sqrt(self.weight.size(1))
-            self.weight.data.uniform_(-stdv, stdv)
+        roc_score, ap_score = get_roc_scores(adj_pred, adj_orig,
+                                             val_edges, val_edges_false)
+        roc_results[1, exper] = roc_score
+        ap_results[1, exper] = ap_score
 
-        def forward(self, emb):
-            adj_pred = torch.matmul(emb, torch.matmul(self.weight, emb.t()))
-            return adj_pred
+        roc_score, ap_score = get_roc_scores(adj_pred, adj_orig,
+                                             test_edges, test_edges_false)
+        roc_results[2, exper] = roc_score
+        ap_results[2, exper] = ap_score
 
-    predictor = LinkPredictor(emb_dim)
-    pos_weight = float(adj_train.shape[0] * adj_train.shape[0] - adj_train.sum()) / adj_train.sum()
-    binary_loss = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight)
-    optimizer = torch.optim.Adam(predictor.parameters())
+    print_stats(roc_results, ap_results)
 
-    epochs = 100
-    for epoch in range(1, epochs + 1):
-        optimizer.zero_grad()
-        adj_pred = predictor(emb)
-        loss = binary_loss(adj_pred, adj_train)
-        loss.backward()
-        optimizer.step()
-
-        adj_pred = adj_pred.detach().numpy()
-        roc_score, ap_score = get_roc_score(val_edges, val_edges_false, adj_pred)
-        log = '\rEpoch: {:03d}, loss = {:.4f}, val_roc = {:.3f}, val_ap = {:.3f}'
-        print(log.format(epoch, loss.item(), roc_score, ap_score), end='',
-              flush=True)
-
-    roc_score, ap_score = get_roc_score(test_edges, test_edges_false, adj_pred)
-    log = '\ntest_roc = {:.3f}, test_ap = {:.3f}'
-    print(log.format(roc_score, ap_score))
-
-    bi_predictor_roc.append(roc_score)
-    bi_predictor_ap.append(ap_score)
-
-def print_stats(roc_results, ap_results, name):
-    log = '{}: test_roc = {:.3f} ± {:.3f}, test_ap = {:.3f} ± {:.3f}'
-    print(log.format(name, 100*np.mean(roc_results), 100*np.std(roc_results),
-                     100*np.mean(ap_results), 100*np.std(ap_results)))
-
-print_stats(dot_predictor_roc, dot_predictor_ap, 'dot predictor')
-print_stats(bi_predictor_roc, bi_predictor_ap, 'bilinear predictor')
+if __name__ == '__main__':
+    main('bilinear', n_experiments=10, epochs=100)
