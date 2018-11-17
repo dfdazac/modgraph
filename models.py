@@ -1,3 +1,4 @@
+import math
 import torch
 import torch.nn as nn
 from torch_geometric.nn import GCNConv
@@ -54,9 +55,9 @@ class Infomax(nn.Module):
 
         return l1 + l2
 
-class Classifier(nn.Module):
+class NodeClassifier(nn.Module):
     def __init__(self, encoder, hidden_dim, num_classes):
-        super(Classifier, self).__init__()
+        super(NodeClassifier, self).__init__()
         self.encoder = encoder
         self.lin = nn.Linear(hidden_dim, num_classes)
 
@@ -68,3 +69,23 @@ class Classifier(nn.Module):
         x = x.detach()
         x = self.lin(x)
         return torch.log_softmax(x, dim=-1)
+
+class DotLinkPredictor(nn.Module):
+    def __init__(self, **kwargs):
+        super(DotLinkPredictor, self).__init__()
+
+    def forward(self, emb):
+        adj_pred = torch.matmul(emb, emb.t())
+        return adj_pred
+
+class BilinearLinkPredictor(nn.Module):
+    def __init__(self, emb_dim):
+        super(BilinearLinkPredictor, self).__init__()
+
+        self.weight = nn.Parameter(torch.Tensor(emb_dim, emb_dim))
+        stdv = 1. / math.sqrt(self.weight.size(1))
+        self.weight.data.uniform_(-stdv, stdv)
+
+    def forward(self, emb):
+        adj_pred = torch.matmul(emb, torch.matmul(self.weight, emb.t()))
+        return adj_pred
