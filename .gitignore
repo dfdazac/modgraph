@@ -115,3 +115,10 @@ dmypy.json
 
 # PyCharm folder
 .idea/
+
+# Saved models
+saved/*
+!saved/.gitkeep
+
+# Data files
+data/*

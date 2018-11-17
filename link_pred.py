@@ -8,7 +8,7 @@ from sklearn.metrics import roc_auc_score, average_precision_score
 import networkx as nx
 
 from preprocessing import mask_test_edges
-from dgi import Infomax
+from models import Infomax
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
