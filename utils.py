@@ -1,7 +1,8 @@
-# Source: https://github.com/tkipf/gae/blob/master/gae/preprocessing.py
+# Source: https://github.com/tkipf/gae
 
 import numpy as np
 import scipy.sparse as sp
+from sklearn.metrics import roc_auc_score, average_precision_score
 
 def sparse_to_tuple(sparse_mx):
     if not sp.isspmatrix_coo(sparse_mx):
@@ -91,3 +92,27 @@ def mask_test_edges(adj):
 
     # NOTE: these edge lists only contain single direction of edge!
     return adj_train, train_edges, val_edges, val_edges_false, test_edges, test_edges_false
+
+def get_roc_score(edges_pos, edges_neg, adj_pred, adj_orig):
+    def sigmoid(x):
+        return 1 / (1 + np.exp(-x))
+
+    # Predict on test set of edges
+    preds = []
+    pos = []
+    for e in edges_pos:
+        preds.append(sigmoid(adj_pred[e[0], e[1]]))
+        pos.append(adj_orig[e[0], e[1]])
+
+    preds_neg = []
+    neg = []
+    for e in edges_neg:
+        preds_neg.append(sigmoid(adj_pred[e[0], e[1]]))
+        neg.append(adj_orig[e[0], e[1]])
+
+    preds_all = np.hstack([preds, preds_neg])
+    labels_all = np.hstack([np.ones(len(preds)), np.zeros(len(preds))])
+    roc_score = roc_auc_score(labels_all, preds_all)
+    ap_score = average_precision_score(labels_all, preds_all)
+
+    return roc_score, ap_score
