@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from torch_geometric.datasets import Planetoid
 import torch
 
-from models import Classifier, Infomax
+from models import NodeClassifier, Infomax
 
 def train_infomax(epoch):
     infomax.train()
@@ -38,9 +38,9 @@ for epoch in range(1, epochs + 1):
 
 torch.save(infomax.state_dict(), osp.join('saved', 'dgi.p'))
 
-classifier = Classifier(infomax.encoder,
-                        hidden_dim,
-                        data.num_classes).to(device)
+classifier = NodeClassifier(infomax.encoder,
+                            hidden_dim,
+                            data.num_classes).to(device)
 
 classifier_optimizer = torch.optim.Adam(classifier.parameters(), lr=0.01)
 
