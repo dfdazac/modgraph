@@ -71,15 +71,23 @@ class NodeClassifier(nn.Module):
         x = self.lin(x)
         return torch.log_softmax(x, dim=-1)
 
-class DotLinkPredictor(nn.Module):
+class LinkPredictor(nn.Module):
+    def __init__(self):
+        super(LinkPredictor, self).__init__()
+
+    def predict(self, emb_a, emb_b):
+        score = self(emb_a, emb_b)
+        return torch.sigmoid(score)
+
+class DotLinkPredictor(LinkPredictor):
     def __init__(self, *args, **kwargs):
         super(DotLinkPredictor, self).__init__()
 
     def forward(self, emb_a, emb_b):
-        score = torch.matmul(emb_a, emb_b.t())
+        score = torch.sum(emb_a * emb_b, dim=-1)
         return score
 
-class BilinearLinkPredictor(nn.Module):
+class BilinearLinkPredictor(LinkPredictor):
     def __init__(self, emb_dim, dropout_rate=0.0, **hparams):
         super(BilinearLinkPredictor, self).__init__()
 
@@ -91,10 +99,10 @@ class BilinearLinkPredictor(nn.Module):
     def forward(self, emb_a, emb_b):
         x_a = self.dropout(emb_a)
         x_b = self.dropout(emb_b)
-        score = torch.matmul(x_a, torch.matmul(self.weight, x_b.t()))
+        score = torch.sum(torch.matmul(x_a, self.weight) * x_b, dim=-1)
         return score
 
-class MLPLinkPredictor(nn.Module):
+class MLPLinkPredictor(LinkPredictor):
     def __init__(self, emb_dim, hidden_dim, dropout_rate):
         super(MLPLinkPredictor, self).__init__()
 
