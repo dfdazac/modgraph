@@ -71,7 +71,7 @@ class NodeClassifier(nn.Module):
         return torch.log_softmax(x, dim=-1)
 
 class DotLinkPredictor(nn.Module):
-    def __init__(self, *args):
+    def __init__(self, *args, **kwargs):
         super(DotLinkPredictor, self).__init__()
 
     def forward(self, emb):
@@ -79,13 +79,15 @@ class DotLinkPredictor(nn.Module):
         return adj_pred
 
 class BilinearLinkPredictor(nn.Module):
-    def __init__(self, emb_dim):
+    def __init__(self, emb_dim, **hparams):
         super(BilinearLinkPredictor, self).__init__()
 
         self.weight = nn.Parameter(torch.Tensor(emb_dim, emb_dim))
         stdv = 1. / math.sqrt(self.weight.size(1))
         self.weight.data.uniform_(-stdv, stdv)
+        self.dropout = nn.Dropout(hparams['dropout_rate'])
 
     def forward(self, emb):
-        adj_pred = torch.matmul(emb, torch.matmul(self.weight, emb.t()))
+        x = self.dropout(emb)
+        adj_pred = torch.matmul(x, torch.matmul(self.weight, x.t()))
         return adj_pred

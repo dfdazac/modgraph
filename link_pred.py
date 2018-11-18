@@ -7,6 +7,7 @@ from torch_geometric.datasets import Planetoid
 import numpy as np
 import networkx as nx
 from tensorboardX import SummaryWriter
+from sklearn.model_selection import ParameterGrid
 
 from utils import mask_test_edges, get_roc_scores
 from models import Infomax, BilinearLinkPredictor, DotLinkPredictor
@@ -33,7 +34,7 @@ def build_text_summary(metadata):
         text_summary += '**' + str(key) + ':** ' + str(value) + '</br>'
     return text_summary
 
-def main(model_name, n_experiments, epochs):
+def train(model_name, n_experiments, epochs, **hparams):
     now = datetime.now().strftime('%Y-%m-%d-%H%M%S')
 
     print(f'Link prediction model: {model_name}')
@@ -81,18 +82,20 @@ def main(model_name, n_experiments, epochs):
         # Encode graph
         emb = infomax.encoder(data, train_edges.t()).detach()
 
-        model = model_class(emb_dim)
-        adj_pred = model(emb)
+        model = model_class(emb_dim, **hparams)
+        model.train()
 
         if model_name != 'dot':
-            logdir = osp.join('runs', now + f'-{exper + 1:d}')
+            # Write model name and hyperparameters to log
+            logdir = osp.join('runs', f'{model_name}-{now}-{exper + 1:d}')
             writer = SummaryWriter(logdir)
-            writer.add_text('metadata',
-                            build_text_summary({'Model': model_name}))
+            metadata_dict = {**{'Model': model_name}, **hparams}
+            writer.add_text('metadata', build_text_summary(metadata_dict))
 
             pos_weight = float(adj_train.shape[0] * adj_train.shape[0] - adj_train.sum()) / adj_train.sum()
             binary_loss = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight)
-            optimizer = torch.optim.Adam(model.parameters())
+            optimizer = torch.optim.Adam(model.parameters(),
+                                         lr=hparams['learning_rate'])
 
             for epoch in range(1, epochs + 1):
                 optimizer.zero_grad()
@@ -114,6 +117,8 @@ def main(model_name, n_experiments, epochs):
 
             print()
 
+        model.eval()
+        adj_pred = model(emb).detach().numpy()
         roc_score, ap_score = get_roc_scores(adj_pred, adj_orig,
                                              val_edges, val_edges_false)
         roc_results[1, exper] = roc_score
@@ -126,11 +131,29 @@ def main(model_name, n_experiments, epochs):
 
     print_stats(roc_results, ap_results)
 
+def hparam_search(model_name):
+    param_grid = {'learning_rate': [1e-3, 1e-2, 1e-1]}
+
+    if model_name == 'bilinear':
+        param_grid['dropout_rate'] = [0.1, 0.25, 0.5]
+
+    grid = ParameterGrid(param_grid)
+
+    for hparams in grid:
+        train(model_name, n_experiments=10, epochs=100, **hparams)
+
 if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument('model', help='Model name',
-                        choices=['dot', 'bilinear'])
+                        choices=['dot', 'bilinear', 'mlp'])
+    parser.add_argument('--search', '-s', dest='search', action='store_true',
+                        help='Set to search hyperparameters for the model')
+
     arg_vars = vars(parser.parse_args())
     model_name = arg_vars['model']
+    search = arg_vars['search']
 
-    main(model_name, n_experiments=2, epochs=5)
+    if search:
+        hparam_search(model_name)
+    else:
+        train(model_name, n_experiments=10, epochs=100, learning_rate=1e-3)
