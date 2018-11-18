@@ -154,7 +154,7 @@ def hparam_search(model_name):
     grid = ParameterGrid(param_grid)
 
     for i, hparams in enumerate(grid):
-        print(f'Hyperparameters setting {i:d}/{len(grid):d}')
+        print(f'Hyperparameters setting {i + 1:d}/{len(grid):d}')
         train(model_name, n_experiments=10, epochs=100, **hparams)
 
 if __name__ == '__main__':
