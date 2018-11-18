@@ -1,10 +1,12 @@
 import os.path as osp
+from datetime import datetime
 from argparse import ArgumentParser
 
 import torch
 from torch_geometric.datasets import Planetoid
 import numpy as np
 import networkx as nx
+from tensorboardX import SummaryWriter
 
 from utils import mask_test_edges, get_roc_scores
 from models import Infomax, BilinearLinkPredictor, DotLinkPredictor
@@ -22,8 +24,9 @@ def print_stats(roc_results, ap_results):
         print('\troc = {:.3f} ± {:.3f}, ap = {:.3f} ± {:.3f}'.format(roc_mean,
             roc_std, ap_mean, ap_std))
 
-
 def main(model_name, n_experiments, epochs):
+    now = datetime.now().strftime('%Y-%m-%d-%H%M%S')
+
     print(f'Link prediction model: {model_name}')
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -73,6 +76,9 @@ def main(model_name, n_experiments, epochs):
         adj_pred = model(emb)
 
         if model_name != 'dot':
+            logdir = osp.join('runs', now + f'-{exper + 1:d}')
+            writer = SummaryWriter(logdir)
+
             pos_weight = float(adj_train.shape[0] * adj_train.shape[0] - adj_train.sum()) / adj_train.sum()
             binary_loss = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight)
             optimizer = torch.optim.Adam(model.parameters())
@@ -90,6 +96,11 @@ def main(model_name, n_experiments, epochs):
                 log = '\rEpoch {:03d}/{:03d} loss = {:.4f} val_roc = {:.3f} val_ap = {:.3f}'
                 print(log.format(epoch, epochs, loss.item(), roc_score, ap_score), end='',
                       flush=True)
+
+                writer.add_scalar('train/loss', loss.item(), epoch)
+                writer.add_scalar('valid/auc', roc_score, epoch)
+                writer.add_scalar('valid/ap', ap_score, epoch)
+
             print()
 
         roc_score, ap_score = get_roc_scores(adj_pred, adj_orig,
@@ -111,4 +122,4 @@ if __name__ == '__main__':
     arg_vars = vars(parser.parse_args())
     model_name = arg_vars['model']
 
-    main(model_name, n_experiments=2, epochs=2)
+    main(model_name, n_experiments=2, epochs=5)

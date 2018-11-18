@@ -122,3 +122,7 @@ saved/*
 
 # Data files
 data/*
+
+# Run logs
+runs/*
+!runs/.gitkeep
