@@ -148,10 +148,13 @@ def hparam_search(model_name):
 
     if model_name == 'bilinear':
         param_grid['dropout_rate'] = [0.1, 0.25, 0.5]
+    else:
+        raise ValueError(f'Invalid model name {model_name}')
 
     grid = ParameterGrid(param_grid)
 
-    for hparams in grid:
+    for i, hparams in enumerate(grid):
+        print(f'Hyperparameters setting {i:d}/{len(grid):d}')
         train(model_name, n_experiments=10, epochs=100, **hparams)
 
 if __name__ == '__main__':
