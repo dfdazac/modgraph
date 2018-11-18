@@ -12,7 +12,8 @@ from sklearn.model_selection import ParameterGrid
 from utils import mask_test_edges, get_roc_scores
 from models import Infomax, BilinearLinkPredictor, DotLinkPredictor
 
-def print_stats(roc_results, ap_results):
+def log_stats(roc_results, ap_results, logdir, metadata_dict):
+    writer = SummaryWriter(logdir)
     splits = ['train', 'val', 'test']
 
     for i in [1, 2]:
@@ -24,6 +25,15 @@ def print_stats(roc_results, ap_results):
         ap_std = np.std(ap_results[i])
         print('\troc = {:.3f} ± {:.3f}, ap = {:.3f} ± {:.3f}'.format(roc_mean,
             roc_std, ap_mean, ap_std))
+
+        results = {'AUC': f'{roc_mean:.3f} ± {roc_std:.3f}',
+                   'AP': f'{ap_mean:.3f} ± {ap_std:.3f}'}
+        metadata_dict = {**metadata_dict, **results}
+        writer.add_text(f'all/{split}', build_text_summary(metadata_dict))
+        writer.add_histogram(f'all/{split}/auc', roc_results)
+        writer.add_histogram(f'all/{split}/ap', ap_results)
+
+    writer.close()
 
 def build_text_summary(metadata):
     """Build a string representation of a dictionary, to be used as
@@ -116,6 +126,7 @@ def train(model_name, n_experiments, epochs, **hparams):
                 writer.add_scalar('valid/ap', ap_score, epoch)
 
             print()
+            writer.close()
 
         model.eval()
         adj_pred = model(emb).detach().numpy()
@@ -129,7 +140,8 @@ def train(model_name, n_experiments, epochs, **hparams):
         roc_results[2, exper] = roc_score
         ap_results[2, exper] = ap_score
 
-    print_stats(roc_results, ap_results)
+    logdir = osp.join('runs', f'{model_name}-{now}-all')
+    log_stats(roc_results, ap_results, logdir, metadata_dict)
 
 def hparam_search(model_name):
     param_grid = {'learning_rate': [1e-3, 1e-2, 1e-1]}
@@ -146,6 +158,7 @@ if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument('model', help='Model name',
                         choices=['dot', 'bilinear', 'mlp'])
+    parser.add_argument('-dropout_rate', '-d', type=float, default=0.0)
     parser.add_argument('--search', '-s', dest='search', action='store_true',
                         help='Set to search hyperparameters for the model')
 
@@ -156,4 +169,5 @@ if __name__ == '__main__':
     if search:
         hparam_search(model_name)
     else:
-        train(model_name, n_experiments=10, epochs=100, learning_rate=1e-3)
+        train(model_name, n_experiments=3, epochs=2, learning_rate=1e-3,
+              **arg_vars)
