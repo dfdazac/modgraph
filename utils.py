@@ -158,12 +158,12 @@ def split_edges(adj):
 
     # Sample zero entries without replacement
     zero_iterator = sample_zero_forever(adj)
-    false_splits = []
+    negative_splits = []
     for i in range(len(positive_splits)):
-        false_edges = np.empty(positive_splits[i].shape, dtype=np.int32)
-        for j in range(false_edges.shape[0]):
-            false_edges[j] = next(zero_iterator)
+        negative_edges = np.empty(positive_splits[i].shape, dtype=np.int32)
+        for j in range(negative_edges.shape[0]):
+            negative_edges[j] = next(zero_iterator)
 
-        false_splits.append(false_edges)
+        negative_splits.append(negative_edges)
 
-    return positive_splits, false_splits
+    return positive_splits, negative_splits
