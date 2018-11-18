@@ -124,15 +124,15 @@ def sample_zero_forever(mat):
     """A generator to obtain zero entries from a sparse matrix"""
     nonzero_or_sampled = set(zip(*mat.nonzero()))
     while True:
-        t1 = tuple(np.random.randint(0, mat.shape[0], 2))
+        t = tuple(np.random.randint(0, mat.shape[0], 2))
         # Don't sample diagonal of the adjacency matrix
-        if t1[0] == t1[1]:
+        if t[0] == t[1]:
             continue
-        # Treat edges as undirected
-        t2 = (t1[1], t1[0])
-        if t1 not in nonzero_or_sampled and t2 not in nonzero_or_sampled:
-            yield t1
-            nonzero_or_sampled.add(t1)
+        if t not in nonzero_or_sampled:
+            yield t
+            # Add edge in both directions
+            nonzero_or_sampled.add(t)
+            nonzero_or_sampled.add((t[1], t[0]))
 
 def split_edges(adj):
     # Remove diagonal elements
