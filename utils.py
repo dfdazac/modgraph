@@ -129,7 +129,7 @@ def sample_zero_forever(mat):
         if t1[0] == t1[1]:
             continue
         # Treat edges as undirected
-        t2 = (t[1], t[0])
+        t2 = (t1[1], t1[0])
         if t1 not in nonzero_or_sampled and t2 not in nonzero_or_sampled:
             yield t1
             nonzero_or_sampled.add(t1)
