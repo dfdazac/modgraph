@@ -119,3 +119,51 @@ def get_roc_scores(adj_pred, adj_orig, edges_pos=None, edges_neg=None):
     ap_score = average_precision_score(labels_all, preds_all)
 
     return roc_score, ap_score
+
+# Source: https://stackoverflow.com/questions/50665681
+def sample_zero_forever(mat):
+    """A generator to obtain zero entries from a sparse matrix"""
+    nonzero_or_sampled = set(zip(*mat.nonzero()))
+    while True:
+        t = tuple(np.random.randint(0, mat.shape[0], 2))
+        if t not in nonzero_or_sampled:
+            yield t
+            nonzero_or_sampled.add(t)
+
+def split_edges(adj):
+    # Remove diagonal elements
+    adj = adj - sp.dia_matrix((adj.diagonal()[np.newaxis, :], [0]),
+                               shape=adj.shape)
+    adj.eliminate_zeros()
+    # Check that diag is zero:
+    assert adj.diagonal().sum() == 0
+
+    adj_triu = sp.triu(adj)
+    adj_tuple = sparse_to_tuple(adj_triu)
+    edges = adj_tuple[0]
+    num_test = int(np.floor(edges.shape[0] / 10.))
+    num_val = int(np.floor(edges.shape[0] / 20.))
+
+    # Shuffle edges
+    all_edge_idx = np.arange(edges.shape[0])
+    np.random.shuffle(all_edge_idx)
+
+    val_edge_idx = all_edge_idx[:num_val]
+    test_edge_idx = all_edge_idx[num_val:(num_val + num_test)]
+    test_edges = edges[test_edge_idx]
+    val_edges = edges[val_edge_idx]
+    train_edges = np.delete(edges, np.hstack([test_edge_idx, val_edge_idx]),
+                            axis=0)
+    positive_splits = [train_edges, val_edges, test_edges]
+
+    # Sample zero entries without replacement
+    zero_iterator = sample_zero_forever(adj)
+    false_splits = []
+    for i in range(len(positive_splits)):
+        false_edges = np.empty(positive_splits[i].shape, dtype=np.int32)
+        for j in range(false_edges.shape[0]):
+            false_edges[j] = next(zero_iterator)
+
+        false_splits.append(false_edges)
+
+    return positive_splits, false_splits
