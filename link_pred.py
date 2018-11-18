@@ -29,6 +29,11 @@ def log_stats(roc_results, ap_results, logdir, metadata_dict):
         print('\troc = {:.2f} ± {:.2f}, ap = {:.2f} ± {:.2f}'.format(roc_mean,
             roc_std, ap_mean, ap_std))
 
+        writer.add_scalar(f'all/{split}/auc_mean', roc_mean)
+        writer.add_scalar(f'all/{split}/auc_std', roc_std)
+        writer.add_scalar(f'all/{split}/ap_mean', ap_mean)
+        writer.add_scalar(f'all/{split}/ap_std', ap_std)
+
         results = {'AUC': f'{roc_mean:.2f} ± {roc_std:.2f}',
                    'AP': f'{ap_mean:.2f} ± {ap_std:.2f}'}
         metadata_dict = {**metadata_dict, **results}
