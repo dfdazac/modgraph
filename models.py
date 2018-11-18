@@ -103,7 +103,7 @@ class BilinearLinkPredictor(LinkPredictor):
         return score
 
 class MLPLinkPredictor(LinkPredictor):
-    def __init__(self, emb_dim, hidden_dim, dropout_rate):
+    def __init__(self, emb_dim, dropout_rate=0.0, hidden_dim=512, **hparams):
         super(MLPLinkPredictor, self).__init__()
 
         self.dropout = nn.Dropout(dropout_rate)
@@ -113,5 +113,5 @@ class MLPLinkPredictor(LinkPredictor):
     def forward(self, emb_a, emb_b):
         x = torch.cat((self.dropout(emb_a), self.dropout(emb_b)), dim=-1)
         x = F.relu(self.linear_input(x))
-        score = self.linear_output(x)
+        score = self.linear_output(x).squeeze()
         return score

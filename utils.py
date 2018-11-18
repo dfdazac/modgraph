@@ -1,9 +1,8 @@
-# Source: https://github.com/tkipf/gae
-
 import numpy as np
 import scipy.sparse as sp
 from sklearn.metrics import roc_auc_score, average_precision_score
 
+# Source: https://github.com/tkipf/gae
 def sparse_to_tuple(sparse_mx):
     if not sp.isspmatrix_coo(sparse_mx):
         sparse_mx = sparse_mx.tocoo()

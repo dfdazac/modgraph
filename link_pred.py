@@ -3,14 +3,17 @@ from datetime import datetime
 from argparse import ArgumentParser
 
 import torch
+import torch.nn as nn
 from torch_geometric.datasets import Planetoid
 import numpy as np
 import networkx as nx
 from tensorboardX import SummaryWriter
 from sklearn.model_selection import ParameterGrid
+from sklearn.metrics import roc_auc_score, average_precision_score
 
-from utils import mask_test_edges, get_roc_scores
-from models import Infomax, BilinearLinkPredictor, DotLinkPredictor
+from utils import mask_test_edges, get_roc_scores, split_edges
+from models import Infomax, DotLinkPredictor, BilinearLinkPredictor,\
+    MLPLinkPredictor
 
 def log_stats(roc_results, ap_results, logdir, metadata_dict):
     writer = SummaryWriter(logdir)
@@ -44,8 +47,25 @@ def build_text_summary(metadata):
         text_summary += '**' + str(key) + ':** ' + str(value) + '</br>'
     return text_summary
 
+def eval_scores(model, node_embeddings, pos_edges, neg_edges):
+    model.eval()
+    edges_test = torch.tensor(np.vstack((pos_edges, neg_edges)),
+                              dtype=torch.long)
+    # Get node features and edge labels
+    x_test = node_embeddings(edges_test)
+    y_test = np.concatenate((np.ones(pos_edges.shape[0]),
+                             np.zeros(neg_edges.shape[0])))
+    # Predict
+    y_pred = model.predict(x_test[:, 0], x_test[:, 1]).detach().numpy()
+
+    auc_score = roc_auc_score(y_test, y_pred)
+    ap_score = average_precision_score(y_test, y_pred)
+
+    return auc_score, ap_score
+
 def train(model_name, n_experiments, epochs, **hparams):
     now = datetime.now().strftime('%Y-%m-%d-%H%M%S')
+    metadata_dict = {**{'Model': model_name}, **hparams}
 
     print(f'Link prediction model: {model_name}')
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -54,6 +74,8 @@ def train(model_name, n_experiments, epochs, **hparams):
         model_class = BilinearLinkPredictor
     elif model_name == 'dot':
         model_class = DotLinkPredictor
+    elif model_name == 'mlp':
+        model_class = MLPLinkPredictor
     else:
         raise ValueError(f'Invalid model name {model_name}')
 
@@ -77,24 +99,23 @@ def train(model_name, n_experiments, epochs, **hparams):
         # Obtain edges for the link prediction task
         adj = nx.adjacency_matrix(nx.from_edgelist(data.edge_index.numpy().T))
         adj_orig = adj
+        positive_splits, negative_splits = split_edges(adj)
+        train_pos, val_pos, test_pos = positive_splits
+        train_neg, val_neg, test_neg = negative_splits
 
-        # Sometimes the assertions in mask_test_edges fail, so we try again
-        while True:
-            try:
-                adj_train, train_edges, val_edges, val_edges_false, test_edges, test_edges_false = mask_test_edges(adj)
-                break
-            except AssertionError:
-                continue
+        # Encode graph and create a lookup table for node embeddings
+        emb = infomax.encoder(data,
+                              torch.tensor(train_pos.T, dtype=torch.long))
+        node_embeddings = nn.Embedding(*emb.shape, _weight=emb)
+        node_embeddings.weight.requires_grad = False
 
-        adj_train = torch.tensor(adj_train.toarray(), dtype=torch.float32)
-        train_edges = torch.tensor(train_edges, dtype=torch.long)
-
-        # Encode graph
-        emb = infomax.encoder(data, train_edges.t()).detach()
+        edges_train = torch.tensor(np.vstack((train_pos, train_neg)),
+                                   dtype=torch.long)
+        x_train = node_embeddings(edges_train)
+        y_train = torch.cat((torch.ones(train_pos.shape[0]),
+                             torch.zeros(train_neg.shape[0])))
 
         model = model_class(emb_dim, **hparams)
-        model.train()
-        metadata_dict = {**{'Model': model_name}, **hparams}
 
         if model_name != 'dot':
             # Write model name and hyperparameters to log
@@ -102,42 +123,41 @@ def train(model_name, n_experiments, epochs, **hparams):
             writer = SummaryWriter(logdir)
             writer.add_text('metadata', build_text_summary(metadata_dict))
 
-            pos_weight = float(adj_train.shape[0] * adj_train.shape[0] - adj_train.sum()) / adj_train.sum()
-            binary_loss = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+            binary_loss = torch.nn.BCEWithLogitsLoss()
             optimizer = torch.optim.Adam(model.parameters(),
                                          lr=hparams['learning_rate'])
 
             for epoch in range(1, epochs + 1):
+                model.train()
                 optimizer.zero_grad()
-                adj_pred = model(emb)
-                loss = binary_loss(adj_pred, adj_train)
+                y_pred = model(x_train[:, 0], x_train[:, 1])
+                loss = binary_loss(y_pred, y_train)
                 loss.backward()
                 optimizer.step()
 
-                adj_pred = adj_pred.detach().numpy()
-                roc_score, ap_score = get_roc_scores(adj_pred, adj_orig,
-                                        val_edges, val_edges_false)
+                auc_score, ap_score = eval_scores(model, node_embeddings,
+                                                  val_pos, val_neg)
                 log = '\rEpoch {:03d}/{:03d} loss = {:.4f} val_roc = {:.3f} val_ap = {:.3f}'
-                print(log.format(epoch, epochs, loss.item(), roc_score, ap_score), end='',
+                print(log.format(epoch, epochs, loss.item(), auc_score, ap_score), end='',
                       flush=True)
 
                 writer.add_scalar('train/loss', loss.item(), epoch)
-                writer.add_scalar('valid/auc', roc_score, epoch)
+                writer.add_scalar('valid/auc', auc_score, epoch)
                 writer.add_scalar('valid/ap', ap_score, epoch)
 
             print()
             writer.close()
 
-        model.eval()
-        adj_pred = model(emb).detach().numpy()
-        roc_score, ap_score = get_roc_scores(adj_pred, adj_orig,
-                                             val_edges, val_edges_false)
-        roc_results[1, exper] = roc_score
+        # Validation
+        auc_score, ap_score = eval_scores(model, node_embeddings,
+                                          val_pos, val_neg)
+        roc_results[1, exper] = auc_score
         ap_results[1, exper] = ap_score
 
-        roc_score, ap_score = get_roc_scores(adj_pred, adj_orig,
-                                             test_edges, test_edges_false)
-        roc_results[2, exper] = roc_score
+        # Test
+        auc_score, ap_score = eval_scores(model, node_embeddings,
+                                          test_pos, test_neg)
+        roc_results[2, exper] = auc_score
         ap_results[2, exper] = ap_score
 
     logdir = osp.join('runs', f'{model_name}-{now}-all')
