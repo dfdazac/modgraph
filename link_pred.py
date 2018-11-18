@@ -24,6 +24,15 @@ def print_stats(roc_results, ap_results):
         print('\troc = {:.3f} ± {:.3f}, ap = {:.3f} ± {:.3f}'.format(roc_mean,
             roc_std, ap_mean, ap_std))
 
+def build_text_summary(metadata):
+    """Build a string representation of a dictionary, to be used as
+    extra logging information to be read in TensorBoard
+    """
+    text_summary = ""
+    for key, value in metadata.items():
+        text_summary += '**' + str(key) + ':** ' + str(value) + '</br>'
+    return text_summary
+
 def main(model_name, n_experiments, epochs):
     now = datetime.now().strftime('%Y-%m-%d-%H%M%S')
 
@@ -78,6 +87,8 @@ def main(model_name, n_experiments, epochs):
         if model_name != 'dot':
             logdir = osp.join('runs', now + f'-{exper + 1:d}')
             writer = SummaryWriter(logdir)
+            writer.add_text('metadata',
+                            build_text_summary({'Model': model_name}))
 
             pos_weight = float(adj_train.shape[0] * adj_train.shape[0] - adj_train.sum()) / adj_train.sum()
             binary_loss = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight)
