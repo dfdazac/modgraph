@@ -19,15 +19,15 @@ def log_stats(roc_results, ap_results, logdir, metadata_dict):
     for i in [1, 2]:
         split = splits[i]
         print(f'{split} results:')
-        roc_mean = np.mean(roc_results[i])
-        roc_std = np.std(roc_results[i])
-        ap_mean = np.mean(ap_results[i])
-        ap_std = np.std(ap_results[i])
-        print('\troc = {:.3f} ± {:.3f}, ap = {:.3f} ± {:.3f}'.format(roc_mean,
+        roc_mean = np.mean(roc_results[i]) * 100
+        roc_std = np.std(roc_results[i]) * 100
+        ap_mean = np.mean(ap_results[i]) * 100
+        ap_std = np.std(ap_results[i]) * 100
+        print('\troc = {:.2f} ± {:.2f}, ap = {:.2f} ± {:.2f}'.format(roc_mean,
             roc_std, ap_mean, ap_std))
 
-        results = {'AUC': f'{roc_mean:.3f} ± {roc_std:.3f}',
-                   'AP': f'{ap_mean:.3f} ± {ap_std:.3f}'}
+        results = {'AUC': f'{roc_mean:.2f} ± {roc_std:.2f}',
+                   'AP': f'{ap_mean:.2f} ± {ap_std:.2f}'}
         metadata_dict = {**metadata_dict, **results}
         writer.add_text(f'all/{split}', build_text_summary(metadata_dict))
         writer.add_histogram(f'all/{split}/auc', roc_results)
@@ -94,12 +94,12 @@ def train(model_name, n_experiments, epochs, **hparams):
 
         model = model_class(emb_dim, **hparams)
         model.train()
+        metadata_dict = {**{'Model': model_name}, **hparams}
 
         if model_name != 'dot':
             # Write model name and hyperparameters to log
             logdir = osp.join('runs', f'{model_name}-{now}-{exper + 1:d}')
             writer = SummaryWriter(logdir)
-            metadata_dict = {**{'Model': model_name}, **hparams}
             writer.add_text('metadata', build_text_summary(metadata_dict))
 
             pos_weight = float(adj_train.shape[0] * adj_train.shape[0] - adj_train.sum()) / adj_train.sum()
@@ -158,7 +158,6 @@ if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument('model', help='Model name',
                         choices=['dot', 'bilinear', 'mlp'])
-    parser.add_argument('-dropout_rate', '-d', type=float, default=0.0)
     parser.add_argument('--search', '-s', dest='search', action='store_true',
                         help='Set to search hyperparameters for the model')
 
@@ -166,8 +165,10 @@ if __name__ == '__main__':
     model_name = arg_vars['model']
     search = arg_vars['search']
 
+    torch.random.manual_seed(42)
+    np.random.seed(42)
+
     if search:
         hparam_search(model_name)
     else:
-        train(model_name, n_experiments=3, epochs=2, learning_rate=1e-3,
-              **arg_vars)
+        train(model_name, n_experiments=10, epochs=100, learning_rate=1e-2)

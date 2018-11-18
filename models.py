@@ -79,13 +79,13 @@ class DotLinkPredictor(nn.Module):
         return adj_pred
 
 class BilinearLinkPredictor(nn.Module):
-    def __init__(self, emb_dim, **hparams):
+    def __init__(self, emb_dim, dropout_rate=0.0, **hparams):
         super(BilinearLinkPredictor, self).__init__()
 
         self.weight = nn.Parameter(torch.Tensor(emb_dim, emb_dim))
         stdv = 1. / math.sqrt(self.weight.size(1))
         self.weight.data.uniform_(-stdv, stdv)
-        self.dropout = nn.Dropout(hparams['dropout_rate'])
+        self.dropout = nn.Dropout(dropout_rate)
 
     def forward(self, emb):
         x = self.dropout(emb)
