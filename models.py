@@ -1,6 +1,7 @@
 import math
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch_geometric.nn import GCNConv
 from torch_geometric.nn.inits import uniform
 
@@ -91,3 +92,17 @@ class BilinearLinkPredictor(nn.Module):
         x = self.dropout(emb)
         adj_pred = torch.matmul(x, torch.matmul(self.weight, x.t()))
         return adj_pred
+
+class MLPLinkPredictor(nn.Module):
+    def __init__(self, emb_dim, hidden_dim, dropout_rate):
+        super(MLPLinkPredictor, self).__init__()
+
+        self.dropout = nn.Dropout(dropout_rate)
+        self.linear_input = nn.Linear(2 * emb_dim, hidden_dim)
+        self.linear_output = nn.Linear(hidden_dim, 1)
+
+    def forward(self, emb_a, emb_b):
+        x = torch.cat((self.dropout(emb_a), self.dropout(emb_b)), dim=-1)
+        x = F.relu(self.linear_input(x))
+        x = self.linear_output(x)
+        return x
