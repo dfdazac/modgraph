@@ -75,9 +75,9 @@ class DotLinkPredictor(nn.Module):
     def __init__(self, *args, **kwargs):
         super(DotLinkPredictor, self).__init__()
 
-    def forward(self, emb):
-        adj_pred = torch.matmul(emb, emb.t())
-        return adj_pred
+    def forward(self, emb_a, emb_b):
+        score = torch.matmul(emb_a, emb_b.t())
+        return score
 
 class BilinearLinkPredictor(nn.Module):
     def __init__(self, emb_dim, dropout_rate=0.0, **hparams):
@@ -88,10 +88,11 @@ class BilinearLinkPredictor(nn.Module):
         self.weight.data.uniform_(-stdv, stdv)
         self.dropout = nn.Dropout(dropout_rate)
 
-    def forward(self, emb):
-        x = self.dropout(emb)
-        adj_pred = torch.matmul(x, torch.matmul(self.weight, x.t()))
-        return adj_pred
+    def forward(self, emb_a, emb_b):
+        x_a = self.dropout(emb_a)
+        x_b = self.dropout(emb_b)
+        score = torch.matmul(x_a, torch.matmul(self.weight, x_b.t()))
+        return score
 
 class MLPLinkPredictor(nn.Module):
     def __init__(self, emb_dim, hidden_dim, dropout_rate):
@@ -104,5 +105,5 @@ class MLPLinkPredictor(nn.Module):
     def forward(self, emb_a, emb_b):
         x = torch.cat((self.dropout(emb_a), self.dropout(emb_b)), dim=-1)
         x = F.relu(self.linear_input(x))
-        x = self.linear_output(x)
-        return x
+        score = self.linear_output(x)
+        return score
