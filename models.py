@@ -88,8 +88,10 @@ class DotLinkPredictor(LinkPredictor):
         return score
 
 class BilinearLinkPredictor(LinkPredictor):
-    def __init__(self, emb_dim, dropout_rate=0.0, **hparams):
+    def __init__(self, emb_dim, **hparams):
         super(BilinearLinkPredictor, self).__init__()
+
+        dropout_rate = hparams.get('dropout_rate', 0.0)
 
         self.weight = nn.Parameter(torch.Tensor(emb_dim, emb_dim))
         stdv = 1. / math.sqrt(self.weight.size(1))
@@ -103,8 +105,11 @@ class BilinearLinkPredictor(LinkPredictor):
         return score
 
 class MLPLinkPredictor(LinkPredictor):
-    def __init__(self, emb_dim, dropout_rate=0.0, hidden_dim=512, **hparams):
+    def __init__(self, emb_dim, **hparams):
         super(MLPLinkPredictor, self).__init__()
+
+        dropout_rate = hparams.get('dropout_rate', 0.0)
+        hidden_dim = hparams.get('hidden_dim', 512)
 
         self.dropout = nn.Dropout(dropout_rate)
         self.linear_input = nn.Linear(2 * emb_dim, hidden_dim)

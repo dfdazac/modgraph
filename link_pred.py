@@ -103,7 +103,6 @@ def train(model_name, n_experiments, epochs, **hparams):
         print('Experiment {:d}'.format(exper + 1))
         # Obtain edges for the link prediction task
         adj = nx.adjacency_matrix(nx.from_edgelist(data.edge_index.numpy().T))
-        adj_orig = adj
         positive_splits, negative_splits = split_edges(adj)
         train_pos, val_pos, test_pos = positive_splits
         train_neg, val_neg, test_neg = negative_splits
@@ -129,8 +128,8 @@ def train(model_name, n_experiments, epochs, **hparams):
             writer.add_text('metadata', build_text_summary(metadata_dict))
 
             binary_loss = torch.nn.BCEWithLogitsLoss()
-            optimizer = torch.optim.Adam(model.parameters(),
-                                         lr=hparams['learning_rate'])
+            learning_rate = hparams.get('learning_rate', 1e-3)
+            optimizer = torch.optim.Adam(model.parameters(), learning_rate)
 
             for epoch in range(1, epochs + 1):
                 model.train()
@@ -169,12 +168,11 @@ def train(model_name, n_experiments, epochs, **hparams):
     log_stats(roc_results, ap_results, logdir, metadata_dict)
 
 def hparam_search(model_name):
-    param_grid = {'learning_rate': [1e-3, 1e-2, 1e-1]}
+    param_grid = {'learning_rate': [1e-3, 1e-2, 1e-1],
+                  'dropout_rate': [0.1, 0.25, 0.5]}
 
-    if model_name == 'bilinear':
-        param_grid['dropout_rate'] = [0.1, 0.25, 0.5]
-    else:
-        raise ValueError(f'Invalid model name {model_name}')
+    if model_name == 'mlp':
+        param_grid['hidden_dim'] = [512, 256]
 
     grid = ParameterGrid(param_grid)
 
@@ -199,4 +197,4 @@ if __name__ == '__main__':
     if search:
         hparam_search(model_name)
     else:
-        train(model_name, n_experiments=10, epochs=100, learning_rate=1e-2)
+        train(model_name, n_experiments=10, epochs=100)
