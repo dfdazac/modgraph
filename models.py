@@ -71,9 +71,10 @@ class GVAE_Encoder(nn.Module):
         else:
             return mu
 
-    def forward(self, x, adj, return_moments=False):
-        hidden1 = self.gc1(x, adj)
-        mu, logvar = self.gc2(hidden1, adj), self.gc3(hidden1, adj)
+    def forward(self, data, edge_index, return_moments=False):
+        hidden1 = self.gc1(data.x, edge_index)
+        mu = self.gc2(hidden1, edge_index)
+        logvar = self.gc3(hidden1, edge_index)
         z = self.reparameterize(mu, logvar)
         if return_moments:
             return z, mu, logvar
@@ -82,25 +83,33 @@ class GVAE_Encoder(nn.Module):
 
 class InnerProductDecoder(nn.Module):
     """Decoder for using inner product for prediction."""
-    def __init__(self, dropout, act=torch.sigmoid):
+    def __init__(self):
         super(InnerProductDecoder, self).__init__()
-        self.dropout = dropout
-        self.act = act
 
     def forward(self, z):
-        z = F.dropout(z, self.dropout, training=self.training)
-        adj = self.act(torch.mm(z, z.t()))
+        adj = torch.mm(z, z.t())
         return adj
 
-class GCNModelVAE(nn.Module):
-    def __init__(self, input_feat_dim, hidden_dim1, hidden_dim2, dropout):
-        super(GCNModelVAE, self).__init__()
+class GVAE(nn.Module):
+    def __init__(self, input_feat_dim, hidden_dim1, hidden_dim2, pos_weight):
+        super(GVAE, self).__init__()
         self.encoder = GVAE_Encoder(input_feat_dim, hidden_dim1, hidden_dim2)
-        self.decoder = InnerProductDecoder(dropout, act=lambda x: x)
+        self.decoder = InnerProductDecoder()
+        self.loss_fn = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
 
-    def forward(self, x, adj):
-        z, mu, logvar = self.encoder(x, adj, return_moments=True)
-        return self.decoder(z), mu, logvar
+    def forward(self, data, edge_index, adj):
+        n_nodes = adj.shape[0]
+        norm = adj.shape[0] * adj.shape[0] / float(
+            (adj.shape[0] * adj.shape[0] - adj.sum()) * 2)
+
+        z, mu, logvar = self.encoder(data, edge_index, return_moments=True)
+        x = self.decoder(z)
+        cost = norm * self.loss_fn(x, adj)
+
+        KLD = -0.5 / n_nodes * torch.mean(torch.sum(
+            1 + 2 * logvar - mu.pow(2) - logvar.exp().pow(2), 1))
+        return cost + KLD
+
 
 class NodeClassifier(nn.Module):
     def __init__(self, encoder, hidden_dim, num_classes):
