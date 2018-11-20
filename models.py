@@ -97,14 +97,14 @@ class GVAE(nn.Module):
         self.decoder = InnerProductDecoder()
         self.loss_fn = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
 
-    def forward(self, data, edge_index, adj):
-        n_nodes = adj.shape[0]
-        norm = adj.shape[0] * adj.shape[0] / float(
-            (adj.shape[0] * adj.shape[0] - adj.sum()) * 2)
+    def forward(self, data, edge_index, adj_label):
+        n_nodes = adj_label.shape[0]
+        norm = adj_label.shape[0] * adj_label.shape[0] / float(
+            (adj_label.shape[0] * adj_label.shape[0] - adj_label.sum()) * 2)
 
         z, mu, logvar = self.encoder(data, edge_index, return_moments=True)
         x = self.decoder(z)
-        cost = norm * self.loss_fn(x, adj)
+        cost = norm * self.loss_fn(x, adj_label)
 
         KLD = -0.5 / n_nodes * torch.mean(torch.sum(
             1 + 2 * logvar - mu.pow(2) - logvar.exp().pow(2), 1))
