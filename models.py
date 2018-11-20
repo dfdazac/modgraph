@@ -56,6 +56,52 @@ class Infomax(nn.Module):
 
         return l1 + l2
 
+class GVAE_Encoder(nn.Module):
+    def __init__(self, input_feat_dim, hidden_dim1, hidden_dim2):
+        super(GVAE_Encoder, self).__init__()
+        self.gc1 = GCNConv(input_feat_dim, hidden_dim1)
+        self.gc2 = GCNConv(hidden_dim1, hidden_dim2)
+        self.gc3 = GCNConv(hidden_dim1, hidden_dim2)
+
+    def reparameterize(self, mu, logvar):
+        if self.training:
+            std = torch.exp(logvar)
+            eps = torch.randn_like(std)
+            return eps.mul(std).add_(mu)
+        else:
+            return mu
+
+    def forward(self, x, adj, return_moments=False):
+        hidden1 = self.gc1(x, adj)
+        mu, logvar = self.gc2(hidden1, adj), self.gc3(hidden1, adj)
+        z = self.reparameterize(mu, logvar)
+        if return_moments:
+            return z, mu, logvar
+        else:
+            return z
+
+class InnerProductDecoder(nn.Module):
+    """Decoder for using inner product for prediction."""
+    def __init__(self, dropout, act=torch.sigmoid):
+        super(InnerProductDecoder, self).__init__()
+        self.dropout = dropout
+        self.act = act
+
+    def forward(self, z):
+        z = F.dropout(z, self.dropout, training=self.training)
+        adj = self.act(torch.mm(z, z.t()))
+        return adj
+
+class GCNModelVAE(nn.Module):
+    def __init__(self, input_feat_dim, hidden_dim1, hidden_dim2, dropout):
+        super(GCNModelVAE, self).__init__()
+        self.encoder = GVAE_Encoder(input_feat_dim, hidden_dim1, hidden_dim2)
+        self.decoder = InnerProductDecoder(dropout, act=lambda x: x)
+
+    def forward(self, x, adj):
+        z, mu, logvar = self.encoder(x, adj, return_moments=True)
+        return self.decoder(z), mu, logvar
+
 class NodeClassifier(nn.Module):
     def __init__(self, encoder, hidden_dim, num_classes):
         super(NodeClassifier, self).__init__()
