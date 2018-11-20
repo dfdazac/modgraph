@@ -108,7 +108,7 @@ class GVAE(nn.Module):
 
         KLD = -0.5 / n_nodes * torch.mean(torch.sum(
             1 + 2 * logvar - mu.pow(2) - logvar.exp().pow(2), 1))
-        return cost + KLD
+        return cost + KLD, mu
 
 
 class NodeClassifier(nn.Module):
