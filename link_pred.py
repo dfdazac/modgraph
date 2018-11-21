@@ -168,11 +168,11 @@ def train(model_name, n_experiments, epochs, **hparams):
     log_stats(roc_results, ap_results, logdir, metadata_dict)
 
 def hparam_search(model_name):
-    param_grid = {'learning_rate': [1e-3, 1e-2, 1e-1],
+    param_grid = {'learning_rate': [1e-4, 1e-3, 1e-2],
                   'dropout_rate': [0.1, 0.25, 0.5]}
 
     if model_name == 'mlp':
-        param_grid['hidden_dim'] = [512, 256]
+        param_grid['hidden_dim'] = [700, 512]
 
     grid = ParameterGrid(param_grid)
 
@@ -197,4 +197,4 @@ if __name__ == '__main__':
     if search:
         hparam_search(model_name)
     else:
-        train(model_name, n_experiments=10, epochs=100)
+        train(model_name, n_experiments=10, epochs=300)
