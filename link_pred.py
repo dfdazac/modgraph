@@ -171,7 +171,7 @@ def hparam_search(model_name, epochs):
                   'dropout_rate': [0.1, 0.25, 0.5]}
 
     if model_name == 'mlp':
-        param_grid['hidden_dim'] = [700, 512]
+        param_grid['hidden_dim'] = [(700,), (512,)]
 
     grid = ParameterGrid(param_grid)
 
