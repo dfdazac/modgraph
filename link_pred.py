@@ -52,16 +52,16 @@ def build_text_summary(metadata):
         text_summary += '**' + str(key) + ':** ' + str(value) + '</br>'
     return text_summary
 
-def eval_scores(model, node_embeddings, pos_edges, neg_edges):
+def eval_scores(model, node_embeddings, pos_edges, neg_edges, device):
     model.eval()
     edges_test = torch.tensor(np.vstack((pos_edges, neg_edges)),
                               dtype=torch.long)
     # Get node features and edge labels
-    x_test = node_embeddings(edges_test)
+    x_test = node_embeddings(edges_test).to(device)
     y_test = np.concatenate((np.ones(pos_edges.shape[0]),
                              np.zeros(neg_edges.shape[0])))
     # Predict
-    y_pred = model.predict(x_test[:, 0], x_test[:, 1]).detach().numpy()
+    y_pred = model.predict(x_test[:, 0], x_test[:, 1]).detach().cpu().numpy()
 
     auc_score = roc_auc_score(y_test, y_pred)
     ap_score = average_precision_score(y_test, y_pred)
@@ -88,11 +88,10 @@ def train(model_name, n_experiments, epochs, **hparams):
     dataset = 'Cora'
     path = osp.join(osp.dirname(osp.realpath(__file__)), 'data', dataset)
     data = Planetoid(path, dataset)[0]
-    data = data.to(device)
 
     # Load pretrained DGI model
     emb_dim = 512
-    infomax = Infomax(data.num_features, emb_dim).to(device)
+    infomax = Infomax(data.num_features, emb_dim)
     infomax.load_state_dict(torch.load(osp.join('saved', 'dgi.p')))
     infomax.eval()
 
@@ -115,11 +114,11 @@ def train(model_name, n_experiments, epochs, **hparams):
 
         edges_train = torch.tensor(np.vstack((train_pos, train_neg)),
                                    dtype=torch.long)
-        x_train = node_embeddings(edges_train)
+        x_train = node_embeddings(edges_train).to(device)
         y_train = torch.cat((torch.ones(train_pos.shape[0]),
-                             torch.zeros(train_neg.shape[0])))
+                             torch.zeros(train_neg.shape[0]))).to(device)
 
-        model = model_class(emb_dim, **hparams)
+        model = model_class(emb_dim, **hparams).to(device)
 
         if model_name != 'dot':
             # Write model name and hyperparameters to log
@@ -127,7 +126,7 @@ def train(model_name, n_experiments, epochs, **hparams):
             writer = SummaryWriter(logdir)
             writer.add_text('metadata', build_text_summary(metadata_dict))
 
-            binary_loss = torch.nn.BCEWithLogitsLoss()
+            binary_loss = torch.nn.BCEWithLogitsLoss().to(device)
             learning_rate = hparams.get('learning_rate', 1e-3)
             optimizer = torch.optim.Adam(model.parameters(), learning_rate)
 
@@ -140,7 +139,7 @@ def train(model_name, n_experiments, epochs, **hparams):
                 optimizer.step()
 
                 auc_score, ap_score = eval_scores(model, node_embeddings,
-                                                  val_pos, val_neg)
+                                                  val_pos, val_neg, device)
                 log = '\rEpoch {:03d}/{:03d} loss = {:.4f} val_roc = {:.3f} val_ap = {:.3f}'
                 print(log.format(epoch, epochs, loss.item(), auc_score, ap_score), end='',
                       flush=True)
@@ -154,13 +153,13 @@ def train(model_name, n_experiments, epochs, **hparams):
 
         # Validation
         auc_score, ap_score = eval_scores(model, node_embeddings,
-                                          val_pos, val_neg)
+                                          val_pos, val_neg, device)
         roc_results[1, exper] = auc_score
         ap_results[1, exper] = ap_score
 
         # Test
         auc_score, ap_score = eval_scores(model, node_embeddings,
-                                          test_pos, test_neg)
+                                          test_pos, test_neg, device)
         roc_results[2, exper] = auc_score
         ap_results[2, exper] = ap_score
 
