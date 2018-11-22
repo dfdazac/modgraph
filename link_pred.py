@@ -167,7 +167,7 @@ def train(model_name, n_experiments, epochs, **hparams):
     logdir = osp.join('runs', f'{model_name}-{now}-all')
     log_stats(roc_results, ap_results, logdir, metadata_dict)
 
-def hparam_search(model_name):
+def hparam_search(model_name, epochs):
     param_grid = {'learning_rate': [1e-4, 1e-3, 1e-2],
                   'dropout_rate': [0.1, 0.25, 0.5]}
 
@@ -178,7 +178,7 @@ def hparam_search(model_name):
 
     for i, hparams in enumerate(grid):
         print(f'Hyperparameters setting {i + 1:d}/{len(grid):d}')
-        train(model_name, n_experiments=10, epochs=100, **hparams)
+        train(model_name, n_experiments=10, epochs=epochs, **hparams)
 
 if __name__ == '__main__':
     parser = ArgumentParser()
@@ -186,15 +186,18 @@ if __name__ == '__main__':
                         choices=['dot', 'bilinear', 'mlp'])
     parser.add_argument('--search', '-s', dest='search', action='store_true',
                         help='Set to search hyperparameters for the model')
+    parser.add_argument('--epochs', type=int, required=True,
+                        help='Number of epochs for training')
 
     arg_vars = vars(parser.parse_args())
     model_name = arg_vars['model']
     search = arg_vars['search']
+    epochs = arg_vars['epochs']
 
     torch.random.manual_seed(42)
     np.random.seed(42)
 
     if search:
-        hparam_search(model_name)
+        hparam_search(model_name, epochs)
     else:
-        train(model_name, n_experiments=10, epochs=300)
+        train(model_name, n_experiments=10, epochs=epochs)
