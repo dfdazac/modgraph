@@ -49,8 +49,9 @@ def gae_for(args):
     adj_label = adj_train + sp.eye(adj_train.shape[0])
     # adj_label = sparse_to_tuple(adj_label)
     adj_label = torch.FloatTensor(adj_label.toarray())
+    train_edges = torch.tensor(train_edges, dtype=torch.long)
 
-    pos_weight = float(adj.shape[0] * adj.shape[0] - adj.sum()) / adj.sum()
+    pos_weight = torch.tensor(float(adj.shape[0] * adj.shape[0] - adj.sum()) / adj.sum())
 
     model = GVAE(feat_dim, args.hidden1, args.hidden2, pos_weight)
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
