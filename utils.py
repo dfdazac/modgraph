@@ -120,7 +120,7 @@ def get_roc_scores(adj_pred, adj_orig, edges_pos=None, edges_neg=None):
     return roc_score, ap_score
 
 # Source: https://stackoverflow.com/questions/50665681
-def sample_zero_forever(mat):
+def sample_zero_entries(mat):
     """A generator to obtain zero entries from a sparse matrix"""
     nonzero_or_sampled = set(zip(*mat.nonzero()))
     while True:
@@ -136,11 +136,11 @@ def sample_zero_forever(mat):
 
 def split_edges(adj):
     # Remove diagonal elements
-    adj = adj + sp.dia_matrix((adj.diagonal()[np.newaxis, :], [0]),
+    adj = adj - sp.dia_matrix((adj.diagonal()[np.newaxis, :], [0]),
                                shape=adj.shape)
     adj.eliminate_zeros()
     # Check that diag is zero:
-    #assert adj.diagonal().sum() == 0
+    assert adj.diagonal().sum() == 0
 
     adj_triu = sp.triu(adj)
     adj_tuple = sparse_to_tuple(adj_triu)
@@ -161,7 +161,7 @@ def split_edges(adj):
     positive_splits = [train_edges, val_edges, test_edges]
 
     # Sample zero entries without replacement
-    zero_iterator = sample_zero_forever(adj)
+    zero_iterator = sample_zero_entries(adj)
     negative_splits = []
     for i in range(len(positive_splits)):
         negative_edges = np.empty(positive_splits[i].shape, dtype=np.int32)
