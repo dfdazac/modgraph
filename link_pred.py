@@ -19,7 +19,7 @@ def log_stats(roc_results, ap_results, logdir, metadata_dict):
     writer = SummaryWriter(logdir)
     splits = ['train', 'val', 'test']
 
-    for i in [1, 2]:
+    for i in range(len(splits)):
         split = splits[i]
         print(f'{split} results:')
         roc_mean = np.mean(roc_results[i]) * 100
@@ -79,7 +79,7 @@ def train(model_name, n_experiments, epochs, **hparams):
         model_class = BilinearLinkPredictor
     elif model_name == 'dot':
         model_class = DotLinkPredictor
-    elif model_name == 'mlp':
+    elif model_name in ['mlp', 'mlp2']:
         model_class = MLPLinkPredictor
     else:
         raise ValueError(f'Invalid model name {model_name}')
@@ -138,18 +138,30 @@ def train(model_name, n_experiments, epochs, **hparams):
                 loss.backward()
                 optimizer.step()
 
-                auc_score, ap_score = eval_scores(model, node_embeddings,
-                                                  val_pos, val_neg, device)
-                log = '\rEpoch {:03d}/{:03d} loss = {:.4f} val_roc = {:.3f} val_ap = {:.3f}'
-                print(log.format(epoch, epochs, loss.item(), auc_score, ap_score), end='',
-                      flush=True)
+                if epoch % 100 == 0:
+                    auc_score, ap_score = eval_scores(model, node_embeddings,
+                                                      train_pos, train_neg, device)
+                    writer.add_scalar('train/loss', loss.item(), epoch)
+                    writer.add_scalar('train/auc', auc_score, epoch)
+                    writer.add_scalar('train/ap', ap_score, epoch)
 
-                writer.add_scalar('train/loss', loss.item(), epoch)
-                writer.add_scalar('valid/auc', auc_score, epoch)
-                writer.add_scalar('valid/ap', ap_score, epoch)
+                    auc_score, ap_score = eval_scores(model, node_embeddings,
+                                                      val_pos, val_neg, device)
+                    log = '\rEpoch {:03d}/{:03d} loss = {:.4f} val_roc = {:.3f} val_ap = {:.3f}'
+                    print(log.format(epoch, epochs, loss.item(), auc_score, ap_score), end='',
+                          flush=True)
+
+                    writer.add_scalar('valid/auc', auc_score, epoch)
+                    writer.add_scalar('valid/ap', ap_score, epoch)
 
             print()
             writer.close()
+
+        # Train
+        auc_score, ap_score = eval_scores(model, node_embeddings,
+                                          train_pos, train_neg, device)
+        roc_results[0, exper] = auc_score
+        ap_results[0, exper] = ap_score
 
         # Validation
         auc_score, ap_score = eval_scores(model, node_embeddings,
@@ -171,7 +183,9 @@ def hparam_search(model_name, epochs):
                   'dropout_rate': [0.1, 0.25, 0.5]}
 
     if model_name == 'mlp':
-        param_grid['hidden_dim'] = [(700,), (512,)]
+        param_grid['hidden_dim'] = [(700,), (512)]
+    elif model_name == 'mlp2':
+        param_grid['hidden_dim'] = [(800, 600), (700, 500), (700, 300)]
 
     grid = ParameterGrid(param_grid)
 
@@ -182,7 +196,7 @@ def hparam_search(model_name, epochs):
 if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument('model', help='Model name',
-                        choices=['dot', 'bilinear', 'mlp'])
+                        choices=['dot', 'bilinear', 'mlp', 'mlp2'])
     parser.add_argument('--search', '-s', dest='search', action='store_true',
                         help='Set to search hyperparameters for the model')
     parser.add_argument('--epochs', type=int, required=True,
