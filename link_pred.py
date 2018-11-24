@@ -184,14 +184,14 @@ def train(model_name, n_experiments, epochs, **hparams):
     log_stats(roc_results, ap_results, logdir, metadata_dict)
 
 def hparam_search(model_name, n_experiments, epochs):
-    param_grid = {'learning_rate': [1e-4, 1e-3, 1e-2],
+    param_grid = {'learning_rate': [1e-4, 1e-3, 5e-3],
                   'dropout_rate': [0.1, 0.25, 0.5],
-                  'weight_decay': [0.0, 1e-1, 1e-2]}
+                  'weight_decay': [1e-3, 1e-4, 1e-5]}
 
     if model_name == 'mlp':
         param_grid['hidden_dim'] = [(700,), (512,)]
     elif model_name == 'mlp2':
-        param_grid['hidden_dim'] = [(800, 600), (700, 500), (700, 300)]
+        param_grid['hidden_dim'] = [(800, 600), (700, 400)]
 
     grid = ParameterGrid(param_grid)
 

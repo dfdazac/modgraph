@@ -166,18 +166,19 @@ class MLPLinkPredictor(LinkPredictor):
         dropout_rate = hparams.get('dropout_rate', 0.0)
         hidden_dim = hparams.get('hidden_dim', (512,))
 
-        self.dropout = nn.Dropout(dropout_rate)
-
-        hidden_layers = [nn.Linear(2 * emb_dim, hidden_dim[0]), nn.ReLU()]
+        hidden_layers = [nn.Linear(2 * emb_dim, hidden_dim[0]),
+                         nn.ReLU(),
+                         nn.Dropout(dropout_rate)]
         for i in range(1, len(hidden_dim)):
             hidden_layers.append(nn.Linear(hidden_dim[i-1], hidden_dim[i]))
             hidden_layers.append(nn.ReLU())
+            hidden_layers.append(nn.Dropout(dropout_rate))
         self.hidden_layers = nn.Sequential(*hidden_layers)
 
         self.linear_output = nn.Linear(hidden_dim[-1], 1)
 
     def forward(self, emb_a, emb_b):
-        x = torch.cat((self.dropout(emb_a), self.dropout(emb_b)), dim=-1)
+        x = torch.cat((emb_a, emb_b), dim=-1)
         x = self.hidden_layers(x)
         score = self.linear_output(x).squeeze()
         return score
