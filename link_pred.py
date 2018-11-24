@@ -70,6 +70,9 @@ def eval_scores(model, node_embeddings, pos_edges, neg_edges, device):
 
 def train(model_name, n_experiments, epochs, **hparams):
     now = datetime.now().strftime('%Y-%m-%d-%H%M%S')
+    torch.random.manual_seed(42)
+    np.random.seed(42)
+
     metadata_dict = {**{'Model': model_name}, **hparams}
 
     print(f'Link prediction model: {model_name}')
@@ -128,7 +131,9 @@ def train(model_name, n_experiments, epochs, **hparams):
 
             binary_loss = torch.nn.BCEWithLogitsLoss().to(device)
             learning_rate = hparams.get('learning_rate', 1e-3)
-            optimizer = torch.optim.Adam(model.parameters(), learning_rate)
+            weight_decay = hparams.get('weight_decay', 0.0)
+            optimizer = torch.optim.Adam(model.parameters(), learning_rate,
+                                         weight_decay=weight_decay)
 
             for epoch in range(1, epochs + 1):
                 model.train()
@@ -180,10 +185,11 @@ def train(model_name, n_experiments, epochs, **hparams):
 
 def hparam_search(model_name, n_experiments, epochs):
     param_grid = {'learning_rate': [1e-4, 1e-3, 1e-2],
-                  'dropout_rate': [0.1, 0.25, 0.5]}
+                  'dropout_rate': [0.1, 0.25, 0.5],
+                  'weight_decay': [0.0, 1e-1, 1e-2]}
 
     if model_name == 'mlp':
-        param_grid['hidden_dim'] = [(700,), (512)]
+        param_grid['hidden_dim'] = [(700,), (512,)]
     elif model_name == 'mlp2':
         param_grid['hidden_dim'] = [(800, 600), (700, 500), (700, 300)]
 
@@ -209,9 +215,6 @@ if __name__ == '__main__':
     search = arg_vars['search']
     epochs = arg_vars['epochs']
     n_experiments = arg_vars['nexp']
-
-    torch.random.manual_seed(42)
-    np.random.seed(42)
 
     if search:
         hparam_search(model_name, n_experiments, epochs)
