@@ -12,7 +12,7 @@ from sklearn.metrics import roc_auc_score, average_precision_score
 
 from utils import split_edges, adj_from_edge_index
 from models import Infomax, DotLinkPredictor, BilinearLinkPredictor,\
-    MLPLinkPredictor
+    MLPLinkPredictor, VGAE
 
 def log_stats(roc_results, ap_results, logdir, metadata_dict):
     writer = SummaryWriter(logdir)
@@ -72,7 +72,7 @@ def eval_scores(model, node_embeddings, pos_edges, neg_edges, device):
 
     return auc_score, ap_score
 
-def train(model_name, n_experiments, epochs, **hparams):
+def train(model_name, encoder_name, n_experiments, epochs, **hparams):
     now = datetime.now().strftime('%Y-%m-%d-%H%M%S')
     torch.random.manual_seed(42)
     np.random.seed(42)
@@ -96,11 +96,21 @@ def train(model_name, n_experiments, epochs, **hparams):
     path = osp.join(osp.dirname(osp.realpath(__file__)), 'data', dataset)
     data = Planetoid(path, dataset)[0]
 
-    # Load pretrained DGI model
-    emb_dim = 512
-    infomax = Infomax(data.num_features, emb_dim)
-    infomax.load_state_dict(torch.load(osp.join('saved', 'dgi.p')))
-    infomax.eval()
+    # Load pretrained encoder
+    if encoder_name == 'dgi':
+        emb_dim = 512
+        infomax = Infomax(data.num_features, emb_dim)
+        infomax.load_state_dict(torch.load(osp.join('saved', 'dgi.p')))
+        encoder = infomax.encoder
+    elif encoder_name == 'vgae':
+        vgae = VGAE(data.num_features, hidden_dim1=32, hidden_dim2=16,
+                    pos_weight=torch.tensor(0.0))
+        vgae.load_state_dict(torch.load(osp.join('saved', 'vgae.p')))
+        encoder = vgae.encoder
+    else:
+        raise ValueError(f'Invalid encoder name {encoder_name}')
+
+    encoder.eval()
 
     roc_results = np.empty([3, n_experiments], dtype=np.float)
     ap_results = np.empty([3, n_experiments], dtype=np.float)
@@ -120,7 +130,7 @@ def train(model_name, n_experiments, epochs, **hparams):
         edge_index_neg = torch.tensor(edge_index_neg, dtype=torch.long)
 
         # Encode graph and create a lookup table for node embeddings
-        emb = infomax.encoder(data, edge_index.t())
+        emb = encoder(data, edge_index.t())
         node_embeddings = nn.Embedding(*emb.shape, _weight=emb)
         node_embeddings.weight.requires_grad = False
 
@@ -129,7 +139,7 @@ def train(model_name, n_experiments, epochs, **hparams):
         y_train = torch.cat((torch.ones(edge_index.shape[0]),
                              torch.zeros(edge_index_neg.shape[0]))).to(device)
 
-        model = model_class(emb_dim, **hparams).to(device)
+        model = model_class(emb.shape[1], **hparams).to(device)
 
         if model_name != 'dot':
             # Write model name and hyperparameters to log
@@ -191,10 +201,10 @@ def train(model_name, n_experiments, epochs, **hparams):
     logdir = osp.join('runs', f'{model_name}-{now}-all')
     log_stats(roc_results, ap_results, logdir, metadata_dict)
 
-def hparam_search(model_name, n_experiments, epochs):
-    param_grid = {'learning_rate': [1e-4, 1e-3, 5e-3],
-                  'dropout_rate': [0.1, 0.25, 0.5],
-                  'weight_decay': [1e-3, 1e-4, 1e-5]}
+def hparam_search(model_name, encoder_name, n_experiments, epochs):
+    param_grid = {'learning_rate': [1e-4, 1e-3, 1e-2],
+                  'dropout_rate': [0.1, 0.25, 0.5, 0.7],
+                  'weight_decay': [0.0]}
 
     if model_name == 'mlp':
         param_grid['hidden_dim'] = [(700,), (512,)]
@@ -205,12 +215,14 @@ def hparam_search(model_name, n_experiments, epochs):
 
     for i, hparams in enumerate(grid):
         print(f'Hyperparameters setting {i + 1:d}/{len(grid):d}')
-        train(model_name, n_experiments, epochs, **hparams)
+        train(model_name, encoder_name, n_experiments, epochs, **hparams)
 
 if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument('model', help='Model name',
                         choices=['dot', 'bilinear', 'mlp', 'mlp2'])
+    parser.add_argument('encoder', help='Graph encoder to use',
+                        choices=['dgi', 'vgae'])
     parser.add_argument('--search', '-s', dest='search', action='store_true',
                         help='Set to search hyperparameters for the model')
     parser.add_argument('--epochs', type=int, default=1000,
@@ -218,13 +230,15 @@ if __name__ == '__main__':
     parser.add_argument('--nexp', type=int, default=1,
                         help='Number of experiments to run with random splits')
 
+
     arg_vars = vars(parser.parse_args())
     model_name = arg_vars['model']
+    encoder_name = arg_vars['encoder']
     search = arg_vars['search']
     epochs = arg_vars['epochs']
     n_experiments = arg_vars['nexp']
 
     if search:
-        hparam_search(model_name, n_experiments, epochs)
+        hparam_search(model_name, encoder_name, n_experiments, epochs)
     else:
-        train(model_name, n_experiments, epochs)
+        train(model_name, encoder_name, n_experiments, epochs)
