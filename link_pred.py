@@ -6,18 +6,19 @@ import torch
 import torch.nn as nn
 from torch_geometric.datasets import Planetoid
 import numpy as np
-import networkx as nx
 from tensorboardX import SummaryWriter
 from sklearn.model_selection import ParameterGrid
 from sklearn.metrics import roc_auc_score, average_precision_score
 
-from utils import mask_test_edges, get_roc_scores, split_edges
+from utils import split_edges, adj_from_edge_index
 from models import Infomax, DotLinkPredictor, BilinearLinkPredictor,\
     MLPLinkPredictor
 
 def log_stats(roc_results, ap_results, logdir, metadata_dict):
     writer = SummaryWriter(logdir)
     splits = ['train', 'val', 'test']
+
+    results = {}
 
     for i in range(len(splits)):
         split = splits[i]
@@ -34,12 +35,15 @@ def log_stats(roc_results, ap_results, logdir, metadata_dict):
         writer.add_scalar(f'all/{split}/ap_mean', ap_mean)
         writer.add_scalar(f'all/{split}/ap_std', ap_std)
 
-        results = {'AUC': f'{roc_mean:.2f} ± {roc_std:.2f}',
-                   'AP': f'{ap_mean:.2f} ± {ap_std:.2f}'}
-        metadata_dict = {**metadata_dict, **results}
-        writer.add_text(f'all/{split}', build_text_summary(metadata_dict))
-        writer.add_histogram(f'all/{split}/auc', roc_results)
-        writer.add_histogram(f'all/{split}/ap', ap_results)
+        results = {**results,
+                   f'{split} AUC': f'{roc_mean:.2f} ± {roc_std:.2f}',
+                   f'{split} AP': f'{ap_mean:.2f} ± {ap_std:.2f}'}
+
+        writer.add_histogram(f'all/{split}/auc', roc_results[i])
+        writer.add_histogram(f'all/{split}/ap', ap_results[i])
+
+    metadata_dict = {**metadata_dict, **results}
+    writer.add_text(f'all/{split}', build_text_summary(metadata_dict))
 
     writer.close()
 
@@ -104,22 +108,26 @@ def train(model_name, n_experiments, epochs, **hparams):
     for exper in range(n_experiments):
         print('Experiment {:d}'.format(exper + 1))
         # Obtain edges for the link prediction task
-        adj = nx.adjacency_matrix(nx.from_edgelist(data.edge_index.numpy().T))
+        adj = adj_from_edge_index(data.edge_index)
         positive_splits, negative_splits = split_edges(adj)
         train_pos, val_pos, test_pos = positive_splits
         train_neg, val_neg, test_neg = negative_splits
 
+        # Add edges in reverse direction for encoding
+        edge_index = np.vstack((train_pos, np.flip(train_pos, axis=1)))
+        edge_index = torch.tensor(edge_index, dtype=torch.long)
+        edge_index_neg = np.vstack((train_neg, np.flip(train_neg, axis=1)))
+        edge_index_neg = torch.tensor(edge_index_neg, dtype=torch.long)
+
         # Encode graph and create a lookup table for node embeddings
-        emb = infomax.encoder(data,
-                              torch.tensor(train_pos.T, dtype=torch.long))
+        emb = infomax.encoder(data, edge_index.t())
         node_embeddings = nn.Embedding(*emb.shape, _weight=emb)
         node_embeddings.weight.requires_grad = False
 
-        edges_train = torch.tensor(np.vstack((train_pos, train_neg)),
-                                   dtype=torch.long)
-        x_train = node_embeddings(edges_train).to(device)
-        y_train = torch.cat((torch.ones(train_pos.shape[0]),
-                             torch.zeros(train_neg.shape[0]))).to(device)
+        train_edges = torch.cat((edge_index, edge_index_neg), dim=0)
+        x_train = node_embeddings(train_edges).to(device)
+        y_train = torch.cat((torch.ones(edge_index.shape[0]),
+                             torch.zeros(edge_index_neg.shape[0]))).to(device)
 
         model = model_class(emb_dim, **hparams).to(device)
 
@@ -145,7 +153,7 @@ def train(model_name, n_experiments, epochs, **hparams):
 
                 if epoch % 100 == 0:
                     auc_score, ap_score = eval_scores(model, node_embeddings,
-                                                      train_pos, train_neg, device)
+                                                train_pos, train_neg, device)
                     writer.add_scalar('train/loss', loss.item(), epoch)
                     writer.add_scalar('train/auc', auc_score, epoch)
                     writer.add_scalar('train/ap', ap_score, epoch)
@@ -205,7 +213,7 @@ if __name__ == '__main__':
                         choices=['dot', 'bilinear', 'mlp', 'mlp2'])
     parser.add_argument('--search', '-s', dest='search', action='store_true',
                         help='Set to search hyperparameters for the model')
-    parser.add_argument('--epochs', type=int, required=True,
+    parser.add_argument('--epochs', type=int, default=1000,
                         help='Number of epochs for training')
     parser.add_argument('--nexp', type=int, default=1,
                         help='Number of experiments to run with random splits')
