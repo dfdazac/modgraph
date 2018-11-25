@@ -9,7 +9,7 @@ from torch import optim
 from torch_geometric.datasets import Planetoid
 from sklearn.metrics import roc_auc_score, average_precision_score
 
-from models import GVAE
+from models import VGAE
 from utils import mask_test_edges, adj_from_edge_index
 
 parser = argparse.ArgumentParser()
@@ -49,7 +49,7 @@ def get_roc_score(emb, adj_orig, edges_pos, edges_neg):
 
     return roc_score, ap_score
 
-def gae_for(args):
+def train(args):
     print("Using {} dataset".format(args.dataset_str))
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -85,7 +85,7 @@ def gae_for(args):
     norm = adj.shape[0] * adj.shape[0] / float(
         (adj.shape[0] * adj.shape[0] - adj.sum()) * 2)
 
-    model = GVAE(feat_dim, args.hidden1, args.hidden2, pos_weight)
+    model = VGAE(feat_dim, args.hidden1, args.hidden2, pos_weight)
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
     hidden_emb = None
@@ -114,6 +114,8 @@ def gae_for(args):
     print('Test ROC score: ' + str(roc_score))
     print('Test AP score: ' + str(ap_score))
 
+    torch.save(model.state_dict(), osp.join('saved', 'vgae.p'))
+
 
 if __name__ == '__main__':
-    gae_for(args)
+    train(args)

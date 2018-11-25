@@ -56,9 +56,9 @@ class Infomax(nn.Module):
 
         return l1 + l2
 
-class GVAE_Encoder(nn.Module):
+class VGEncoder(nn.Module):
     def __init__(self, input_feat_dim, hidden_dim1, hidden_dim2):
-        super(GVAE_Encoder, self).__init__()
+        super(VGEncoder, self).__init__()
         self.gc1 = GCNConv(input_feat_dim, hidden_dim1, bias=False)
         self.gc2 = GCNConv(hidden_dim1, hidden_dim2, bias=False)
         self.gc3 = GCNConv(hidden_dim1, hidden_dim2, bias=False)
@@ -90,10 +90,10 @@ class InnerProductDecoder(nn.Module):
         adj = torch.mm(z, z.t())
         return adj
 
-class GVAE(nn.Module):
+class VGAE(nn.Module):
     def __init__(self, input_feat_dim, hidden_dim1, hidden_dim2, pos_weight):
-        super(GVAE, self).__init__()
-        self.encoder = GVAE_Encoder(input_feat_dim, hidden_dim1, hidden_dim2)
+        super(VGAE, self).__init__()
+        self.encoder = VGEncoder(input_feat_dim, hidden_dim1, hidden_dim2)
         self.decoder = InnerProductDecoder()
         self.loss_fn = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
 
