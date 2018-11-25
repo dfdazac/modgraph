@@ -59,9 +59,9 @@ class Infomax(nn.Module):
 class GVAE_Encoder(nn.Module):
     def __init__(self, input_feat_dim, hidden_dim1, hidden_dim2):
         super(GVAE_Encoder, self).__init__()
-        self.gc1 = GCNConv(input_feat_dim, hidden_dim1)
-        self.gc2 = GCNConv(hidden_dim1, hidden_dim2)
-        self.gc3 = GCNConv(hidden_dim1, hidden_dim2)
+        self.gc1 = GCNConv(input_feat_dim, hidden_dim1, bias=False)
+        self.gc2 = GCNConv(hidden_dim1, hidden_dim2, bias=False)
+        self.gc3 = GCNConv(hidden_dim1, hidden_dim2, bias=False)
 
     def reparameterize(self, mu, logvar):
         if self.training:
@@ -72,7 +72,7 @@ class GVAE_Encoder(nn.Module):
             return mu
 
     def forward(self, data, edge_index, return_moments=False):
-        hidden1 = self.gc1(data.x, edge_index)
+        hidden1 = F.relu(self.gc1(data.x, edge_index))
         mu = self.gc2(hidden1, edge_index)
         logvar = self.gc3(hidden1, edge_index)
         z = self.reparameterize(mu, logvar)
@@ -97,17 +97,14 @@ class GVAE(nn.Module):
         self.decoder = InnerProductDecoder()
         self.loss_fn = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
 
-    def forward(self, data, edge_index, adj_label):
-        n_nodes = adj_label.shape[0]
-        norm = adj_label.shape[0] * adj_label.shape[0] / float(
-            (adj_label.shape[0] * adj_label.shape[0] - adj_label.sum()) * 2)
-
+    def forward(self, data, edge_index, adj_label, norm):
         z, mu, logvar = self.encoder(data, edge_index, return_moments=True)
         x = self.decoder(z)
         cost = norm * self.loss_fn(x, adj_label)
 
-        KLD = -0.5 / n_nodes * torch.mean(torch.sum(
+        KLD = -0.5 / data.num_nodes * torch.mean(torch.sum(
             1 + 2 * logvar - mu.pow(2) - logvar.exp().pow(2), 1))
+
         return cost + KLD, mu
 
 
