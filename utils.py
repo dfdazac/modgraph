@@ -158,6 +158,7 @@ def split_edges(adj):
     val_edges = edges[val_edge_idx]
     train_edges = np.delete(edges, np.hstack([test_edge_idx, val_edge_idx]),
                             axis=0)
+    # NOTE: these edge lists only contain single direction of edge!
     positive_splits = [train_edges, val_edges, test_edges]
 
     # Sample zero entries without replacement
@@ -171,3 +172,17 @@ def split_edges(adj):
         negative_splits.append(negative_edges)
 
     return positive_splits, negative_splits
+
+def adj_from_edge_index(edge_index):
+    """Get a sparse adjacency matrix from an edge index (as the one used in the
+    torch_geometric.datasets.Planetoid class).
+    Args:
+        - edge_index: tensor, (2, N), N is the number of edges.
+    """
+    n_edges = edge_index.shape[1]
+    rows = edge_index[0].numpy()
+    cols = edge_index[1].numpy()
+    values = np.ones(n_edges, dtype=np.bool)
+    partial_adj = sp.coo_matrix((values, (rows, cols)))
+    boolean_adj = partial_adj + partial_adj.T
+    return boolean_adj.astype(np.int64).tocsr()
