@@ -1,10 +1,16 @@
 import os.path as osp
+from argparse import ArgumentParser
 
 import torch.nn.functional as F
 from torch_geometric.datasets import Planetoid
 import torch
 
 from models import NodeClassifier, Infomax
+
+parser = ArgumentParser()
+parser.add_argument('dataset', choices=['cora', 'citeseer', 'pubmed'])
+arg_vars = vars(parser.parse_args())
+dataset = arg_vars['dataset']
 
 def train_infomax(epoch):
     infomax.train()
@@ -21,7 +27,6 @@ def train_infomax(epoch):
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-dataset = 'Cora'
 path = osp.join(osp.dirname(osp.realpath(__file__)), 'data', dataset)
 data = Planetoid(path, dataset)[0]
 data = data.to(device)
@@ -31,12 +36,12 @@ infomax = Infomax(data.num_features, hidden_dim).to(device)
 infomax_optimizer = torch.optim.Adam(infomax.parameters(), lr=0.001)
 
 print('Train deep graph infomax.')
-epochs = 2
+epochs = 300
 for epoch in range(1, epochs + 1):
     loss = train_infomax(epoch)
     print('Epoch: {:03d}, Loss: {:.7f}'.format(epoch, loss))
 
-torch.save(infomax.state_dict(), osp.join('saved', 'dgi.p'))
+torch.save(infomax.state_dict(), osp.join('saved', f'dgi-{dataset}.p'))
 
 classifier = NodeClassifier(infomax.encoder,
                             hidden_dim,
