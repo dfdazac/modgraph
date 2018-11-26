@@ -56,10 +56,9 @@ def train(args):
     torch.random.manual_seed(42)
     np.random.seed(42)
 
-    dataset = 'Cora'
+    dataset = args.dataset_str
     path = osp.join(osp.dirname(osp.realpath(__file__)), 'data', dataset)
     data = Planetoid(path, dataset)[0]
-    data = data.to(device)
 
     adj = adj_from_edge_index(data.edge_index)
     n_nodes, feat_dim = data.x.shape
@@ -75,20 +74,21 @@ def train(args):
     # Some preprocessing
     adj_label = adj_train + sp.eye(adj_train.shape[0])
     # adj_label = sparse_to_tuple(adj_label)
-    adj_label = torch.FloatTensor(adj_label.toarray())
+    adj_label = torch.FloatTensor(adj_label.toarray()).to(device)
 
     # Add edges in reverse direction
     train_edges = np.vstack((train_edges, np.flip(train_edges, axis=1))).T
-    train_edges = torch.tensor(train_edges, dtype=torch.long)
+    train_edges = torch.tensor(train_edges, dtype=torch.long).to(device)
 
     pos_weight = torch.tensor(float(adj.shape[0] * adj.shape[0] - adj.sum()) / adj.sum())
     norm = adj.shape[0] * adj.shape[0] / float(
         (adj.shape[0] * adj.shape[0] - adj.sum()) * 2)
 
-    model = VGAE(feat_dim, args.hidden1, args.hidden2, pos_weight)
+    model = VGAE(feat_dim, args.hidden1, args.hidden2, pos_weight).to(device)
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
     hidden_emb = None
+    data = data.to(device)
     for epoch in range(args.epochs):
         t = time.time()
         model.train()
@@ -114,7 +114,7 @@ def train(args):
     print('Test ROC score: ' + str(roc_score))
     print('Test AP score: ' + str(ap_score))
 
-    torch.save(model.state_dict(), osp.join('saved', 'vgae.p'))
+    torch.save(model.state_dict(), osp.join('saved', f'vgae-{dataset}.p'))
 
 
 if __name__ == '__main__':
