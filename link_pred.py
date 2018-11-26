@@ -72,7 +72,7 @@ def eval_scores(model, node_embeddings, pos_edges, neg_edges, device):
 
     return auc_score, ap_score
 
-def train(model_name, encoder_name, n_experiments, epochs, **hparams):
+def train(model_name, dataset, encoder_name, n_experiments, epochs, **hparams):
     now = datetime.now().strftime('%Y-%m-%d-%H%M%S')
     torch.random.manual_seed(42)
     np.random.seed(42)
@@ -92,7 +92,6 @@ def train(model_name, encoder_name, n_experiments, epochs, **hparams):
         raise ValueError(f'Invalid model name {model_name}')
 
     # Load data
-    dataset = 'Cora'
     path = osp.join(osp.dirname(osp.realpath(__file__)), 'data', dataset)
     data = Planetoid(path, dataset)[0]
 
@@ -100,12 +99,14 @@ def train(model_name, encoder_name, n_experiments, epochs, **hparams):
     if encoder_name == 'dgi':
         emb_dim = 512
         infomax = Infomax(data.num_features, emb_dim)
-        infomax.load_state_dict(torch.load(osp.join('saved', 'dgi.p')))
+        infomax.load_state_dict(torch.load(osp.join('saved', f'dgi-{dataset}.p'),
+                                           map_location='cpu'))
         encoder = infomax.encoder
     elif encoder_name == 'vgae':
         vgae = VGAE(data.num_features, hidden_dim1=32, hidden_dim2=16,
                     pos_weight=torch.tensor(0.0))
-        vgae.load_state_dict(torch.load(osp.join('saved', 'vgae.p')))
+        vgae.load_state_dict(torch.load(osp.join('saved', f'vgae-{dataset}.p'),
+                                        map_location='cpu'))
         encoder = vgae.encoder
     else:
         raise ValueError(f'Invalid encoder name {encoder_name}')
@@ -201,7 +202,7 @@ def train(model_name, encoder_name, n_experiments, epochs, **hparams):
     logdir = osp.join('runs', f'{model_name}-{now}-all')
     log_stats(roc_results, ap_results, logdir, metadata_dict)
 
-def hparam_search(model_name, encoder_name, n_experiments, epochs):
+def hparam_search(model_name, dataset, encoder_name, n_experiments, epochs):
     param_grid = {'learning_rate': [1e-4, 1e-3, 1e-2],
                   'dropout_rate': [0.1, 0.25, 0.5, 0.7],
                   'weight_decay': [0.0]}
@@ -215,12 +216,14 @@ def hparam_search(model_name, encoder_name, n_experiments, epochs):
 
     for i, hparams in enumerate(grid):
         print(f'Hyperparameters setting {i + 1:d}/{len(grid):d}')
-        train(model_name, encoder_name, n_experiments, epochs, **hparams)
+        train(model_name, dataset, encoder_name, n_experiments, epochs,
+              **hparams)
 
 if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument('model', help='Model name',
                         choices=['dot', 'bilinear', 'mlp', 'mlp2'])
+    parser.add_argument('dataset', choices=['cora', 'citeseer', 'pubmed'])
     parser.add_argument('encoder', help='Graph encoder to use',
                         choices=['dgi', 'vgae'])
     parser.add_argument('--search', '-s', dest='search', action='store_true',
@@ -233,12 +236,13 @@ if __name__ == '__main__':
 
     arg_vars = vars(parser.parse_args())
     model_name = arg_vars['model']
+    dataset = arg_vars['dataset']
     encoder_name = arg_vars['encoder']
     search = arg_vars['search']
     epochs = arg_vars['epochs']
     n_experiments = arg_vars['nexp']
 
     if search:
-        hparam_search(model_name, encoder_name, n_experiments, epochs)
+        hparam_search(model_name, dataset, encoder_name, n_experiments, epochs)
     else:
-        train(model_name, encoder_name, n_experiments, epochs)
+        train(model_name, dataset, encoder_name, n_experiments, epochs)
