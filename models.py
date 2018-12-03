@@ -43,9 +43,9 @@ class Infomax(nn.Module):
         self.discriminator = Discriminator(hidden_dim)
         self.loss = nn.BCEWithLogitsLoss()
 
-    def forward(self, data):
-        positive = self.encoder(data, data.edge_index, corrupt=False)
-        negative = self.encoder(data, data.edge_index, corrupt=True)
+    def forward(self, data, edge_index):
+        positive = self.encoder(data, edge_index, corrupt=False)
+        negative = self.encoder(data, edge_index, corrupt=True)
         summary = torch.sigmoid(positive.mean(dim=0))
 
         positive = self.discriminator(positive, summary)

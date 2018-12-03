@@ -4,8 +4,10 @@ from argparse import ArgumentParser
 import torch.nn.functional as F
 from torch_geometric.datasets import Planetoid
 import torch
+import numpy as np
 
 from models import NodeClassifier, Infomax
+from utils import adj_from_edge_index, split_edges
 
 parser = ArgumentParser()
 parser.add_argument('dataset', choices=['cora', 'citeseer', 'pubmed'])
@@ -20,7 +22,7 @@ def train_infomax(epoch):
             param_group['lr'] = 0.0001
 
     infomax_optimizer.zero_grad()
-    loss = infomax(data)
+    loss = infomax(data, edge_index)
     loss.backward()
     infomax_optimizer.step()
     return loss.item()
@@ -29,7 +31,19 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 path = osp.join(osp.dirname(osp.realpath(__file__)), 'data', dataset)
 data = Planetoid(path, dataset)[0]
-data = data.to(device)
+data = data
+
+torch.random.manual_seed(42)
+np.random.seed(42)
+
+# Obtain edges for the link prediction task
+adj = adj_from_edge_index(data.edge_index)
+positive_splits, _ = split_edges(adj)
+train_pos, val_pos, test_pos = positive_splits
+
+# Add edges in reverse direction for encoding
+edge_index = np.vstack((train_pos, np.flip(train_pos, axis=1)))
+edge_index = torch.tensor(edge_index, dtype=torch.long).to(device)
 
 hidden_dim = 512
 infomax = Infomax(data.num_features, hidden_dim).to(device)
