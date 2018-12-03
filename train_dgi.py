@@ -43,7 +43,8 @@ train_pos, val_pos, test_pos = positive_splits
 
 # Add edges in reverse direction for encoding
 edge_index = np.vstack((train_pos, np.flip(train_pos, axis=1)))
-edge_index = torch.tensor(edge_index, dtype=torch.long).to(device)
+edge_index = torch.tensor(edge_index.T, dtype=torch.long).to(device)
+data = data.to(device)
 
 hidden_dim = 512
 infomax = Infomax(data.num_features, hidden_dim).to(device)
