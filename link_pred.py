@@ -43,6 +43,8 @@ def log_stats(roc_results, ap_results, logdir, metadata_dict):
         writer.add_histogram(f'all/{split}/ap', ap_results[i])
 
     metadata_dict = {**metadata_dict, **results}
+
+    # FIXME: split shouldn't go here
     writer.add_text(f'all/{split}', build_text_summary(metadata_dict))
 
     writer.close()
@@ -77,7 +79,8 @@ def train(model_name, dataset, encoder_name, n_experiments, epochs, **hparams):
     torch.random.manual_seed(42)
     np.random.seed(42)
 
-    metadata_dict = {**{'Model': model_name}, **hparams}
+    metadata_dict = {**{'Model': model_name, 'Encoder': encoder_name},
+                     **hparams}
 
     print(f'Link prediction model: {model_name}')
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
