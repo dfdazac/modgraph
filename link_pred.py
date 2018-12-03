@@ -44,8 +44,7 @@ def log_stats(roc_results, ap_results, logdir, metadata_dict):
 
     metadata_dict = {**metadata_dict, **results}
 
-    # FIXME: split shouldn't go here
-    writer.add_text(f'all/{split}', build_text_summary(metadata_dict))
+    writer.add_text(f'all', build_text_summary(metadata_dict))
 
     writer.close()
 
