@@ -142,8 +142,6 @@ def split_edges(adj):
     adj = adj - sp.dia_matrix((adj.diagonal()[np.newaxis, :], [0]),
                                shape=adj.shape)
     adj.eliminate_zeros()
-    # Check that diag is zero:
-    assert adj.diagonal().sum() == 0
 
     adj_triu = sp.triu(adj)
     adj_tuple = sparse_to_tuple(adj_triu)
@@ -161,12 +159,14 @@ def split_edges(adj):
     val_edges = edges[val_edge_idx]
     train_edges = np.delete(edges, np.hstack([test_edge_idx, val_edge_idx]),
                             axis=0)
-    # NOTE: these edge lists only contain single direction of edge!
-    positive_splits = [train_edges, val_edges, test_edges]
 
     # Sample zero entries without replacement
     zero_iterator = sample_zero_entries(adj)
+
+    # NOTE: these edge lists only contain single direction of edge!
+    positive_splits = [train_edges, val_edges, test_edges]
     negative_splits = []
+
     for i in range(len(positive_splits)):
         negative_edges = np.empty(positive_splits[i].shape, dtype=np.int32)
         for j in range(negative_edges.shape[0]):
