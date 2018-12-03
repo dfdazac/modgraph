@@ -135,6 +135,9 @@ def sample_zero_entries(mat):
             nonzero_or_sampled.add((t[1], t[0]))
 
 def split_edges(adj):
+    """Obtain positive and negative train/val/test edges for an *undirected*
+    graph given its symmetric adjacency matrix.
+    """
     # Remove diagonal elements
     adj = adj - sp.dia_matrix((adj.diagonal()[np.newaxis, :], [0]),
                                shape=adj.shape)
@@ -174,8 +177,8 @@ def split_edges(adj):
     return positive_splits, negative_splits
 
 def adj_from_edge_index(edge_index):
-    """Get a sparse adjacency matrix from an edge index (as the one used in the
-    torch_geometric.datasets.Planetoid class).
+    """Get a sparse symmetric adjacency matrix from an edge index (as the one
+    used in the torch_geometric.datasets.Planetoid class).
     Args:
         - edge_index: tensor, (2, N), N is the number of edges.
     """
