@@ -98,7 +98,7 @@ def train(args):
         cur_loss = loss.item()
         optimizer.step()
 
-        hidden_emb = mu.data.numpy()
+        hidden_emb = mu.data.cpu().numpy()
         roc_curr, ap_curr = get_roc_score(hidden_emb, adj_orig, val_edges,
                                           val_edges_false)
 
