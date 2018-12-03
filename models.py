@@ -71,7 +71,7 @@ class VGEncoder(nn.Module):
         else:
             return mu
 
-    def forward(self, data, edge_index, return_moments=False):
+    def forward(self, data, edge_index, return_moments=False, **kwargs):
         hidden1 = F.relu(self.gc1(data.x, edge_index))
         mu = self.gc2(hidden1, edge_index)
         logvar = self.gc3(hidden1, edge_index)
