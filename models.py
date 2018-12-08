@@ -90,11 +90,27 @@ class InnerProductDecoder(nn.Module):
         adj = torch.mm(z, z.t())
         return adj
 
+class BilinearDecoder(nn.Module):
+    """Decoder for using inner product for prediction."""
+    def __init__(self, input_dim):
+        super(InnerProductDecoder, self).__init__()
+        self.weight = nn.Parameter(torch.Tensor(input_dim, input_dim))
+        stdv = 1. / math.sqrt(self.weight.size(1))
+        self.weight.data.uniform_(-stdv, stdv)
+
+    def forward(self, z):
+        adj = torch.mm(torch.mm(z, self.weight), z.t())
+        return adj
+
 class VGAE(nn.Module):
-    def __init__(self, input_feat_dim, hidden_dim1, hidden_dim2, pos_weight):
+    def __init__(self, input_feat_dim, hidden_dim1, hidden_dim2, pos_weight,
+                 decoder='inner_product'):
         super(VGAE, self).__init__()
         self.encoder = VGEncoder(input_feat_dim, hidden_dim1, hidden_dim2)
-        self.decoder = InnerProductDecoder()
+        if decoder == 'inner_product':
+            self.decoder = InnerProductDecoder()
+        elif decoder == 'bilinear':
+            self.decoder = BilinearDecoder(hidden_dim2)
         self.loss_fn = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
 
     def forward(self, data, edge_index, adj_label, norm):
