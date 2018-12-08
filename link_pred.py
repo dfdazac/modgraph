@@ -12,7 +12,7 @@ from sklearn.metrics import roc_auc_score, average_precision_score
 
 from utils import split_edges, adj_from_edge_index
 from models import Infomax, DotLinkPredictor, BilinearLinkPredictor,\
-    MLPLinkPredictor, VGAE
+    MLPLinkPredictor, VGAE, GAE
 
 def log_stats(roc_results, ap_results, logdir, metadata_dict):
     writer = SummaryWriter(logdir)
@@ -101,15 +101,24 @@ def train(model_name, dataset, encoder_name, n_experiments, epochs, **hparams):
     if encoder_name == 'dgi':
         emb_dim = 512
         infomax = Infomax(data.num_features, emb_dim)
-        infomax.load_state_dict(torch.load(osp.join('saved', f'dgi-{dataset}.p'),
+        infomax.load_state_dict(torch.load(osp.join('saved',
+                                                    f'{encoder_name}-{dataset}.p'),
                                            map_location='cpu'))
         encoder = infomax.encoder
     elif encoder_name == 'vgae':
         vgae = VGAE(data.num_features, hidden_dim1=32, hidden_dim2=16,
                     pos_weight=torch.tensor(0.0))
-        vgae.load_state_dict(torch.load(osp.join('saved', f'vgae-{dataset}.p'),
+        vgae.load_state_dict(torch.load(osp.join('saved',
+                                                 f'{encoder_name}-{dataset}.p'),
                                         map_location='cpu'))
         encoder = vgae.encoder
+    elif encoder_name == 'gae':
+        gae = GAE(data.num_features, hidden_dim1=32, hidden_dim2=16,
+                    pos_weight=torch.tensor(0.0))
+        gae.load_state_dict(torch.load(osp.join('saved',
+                                                f'{encoder_name}-{dataset}.p'),
+                                        map_location='cpu'))
+        encoder = gae.encoder
     else:
         raise ValueError(f'Invalid encoder name {encoder_name}')
 
@@ -227,7 +236,7 @@ if __name__ == '__main__':
                         choices=['dot', 'bilinear', 'mlp', 'mlp2'])
     parser.add_argument('dataset', choices=['cora', 'citeseer', 'pubmed'])
     parser.add_argument('encoder', help='Graph encoder to use',
-                        choices=['dgi', 'vgae'])
+                        choices=['dgi', 'vgae', 'gae'])
     parser.add_argument('--search', '-s', dest='search', action='store_true',
                         help='Set to search hyperparameters for the model')
     parser.add_argument('--epochs', type=int, default=1000,
