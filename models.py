@@ -107,6 +107,30 @@ class VGAE(nn.Module):
 
         return cost + KLD, mu
 
+class GraphEncoder(nn.Module):
+    def __init__(self, input_feat_dim, hidden_dim1, hidden_dim2):
+        super(GraphEncoder, self).__init__()
+        self.gc1 = GCNConv(input_feat_dim, hidden_dim1, bias=False)
+        self.gc2 = GCNConv(hidden_dim1, hidden_dim2, bias=False)
+
+    def forward(self, data, edge_index, return_moments=False, **kwargs):
+        hidden1 = F.relu(self.gc1(data.x, edge_index))
+        z = self.gc2(hidden1, edge_index)
+        return z
+
+class GAE(nn.Module):
+    def __init__(self, input_feat_dim, hidden_dim1, hidden_dim2, pos_weight):
+        super(GAE, self).__init__()
+        self.encoder = GraphEncoder(input_feat_dim, hidden_dim1, hidden_dim2)
+        self.decoder = InnerProductDecoder()
+        self.loss_fn = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+
+    def forward(self, data, edge_index, adj_label, norm):
+        z = self.encoder(data, edge_index, return_moments=True)
+        x = self.decoder(z)
+        cost = norm * self.loss_fn(x, adj_label)
+
+        return cost, z
 
 class NodeClassifier(nn.Module):
     def __init__(self, encoder, hidden_dim, num_classes):
