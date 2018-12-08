@@ -6,12 +6,12 @@ from torch_geometric.datasets import Planetoid
 import torch
 import numpy as np
 
-from models import NodeClassifier, Infomax, VGAE
+from models import NodeClassifier, Infomax, VGAE, GAE
 from utils import adj_from_edge_index, split_edges
 
 parser = ArgumentParser()
 parser.add_argument('dataset', choices=['cora', 'citeseer', 'pubmed'])
-parser.add_argument('--load', choices=['dgi', 'vgae'],
+parser.add_argument('--load', choices=['dgi', 'vgae', 'gae'],
                     help='Pretrained encoder to load')
 arg_vars = vars(parser.parse_args())
 dataset = arg_vars['dataset']
@@ -64,14 +64,20 @@ if load is None:
 elif load == 'dgi':
     hidden_dim = 512
     model = Infomax(data.num_features, hidden_dim).to(device)
-    model.load_state_dict(torch.load(osp.join('saved', f'dgi-{dataset}.p'),
+    model.load_state_dict(torch.load(osp.join('saved', f'{load}-{dataset}.p'),
                                            map_location='cpu'))
 elif load == 'vgae':
     hidden_dim = 16
     model = VGAE(data.num_features, hidden_dim1=32, hidden_dim2=16,
                 pos_weight=torch.tensor(0.0))
-    model.load_state_dict(torch.load(osp.join('saved', f'vgae-{dataset}.p'),
+    model.load_state_dict(torch.load(osp.join('saved', f'{load}-{dataset}.p'),
                                     map_location='cpu'))
+elif load == 'gae':
+    hidden_dim = 16
+    model = GAE(data.num_features, hidden_dim1=32, hidden_dim2=16,
+                 pos_weight=torch.tensor(0.0))
+    model.load_state_dict(torch.load(osp.join('saved', f'{load}-{dataset}.p'),
+                                     map_location='cpu'))
 
 classifier = NodeClassifier(model.encoder,
                             hidden_dim,
