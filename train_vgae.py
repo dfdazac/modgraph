@@ -9,11 +9,11 @@ from torch import optim
 from torch_geometric.datasets import Planetoid
 from sklearn.metrics import roc_auc_score, average_precision_score
 
-from models import VGAE
+from models import VGAE, GAE
 from utils import mask_test_edges, adj_from_edge_index
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--model', type=str, default='gcn_vae', help="models used")
+parser.add_argument('--model', type=str, default='vgae', help="models used")
 parser.add_argument('--seed', type=int, default=42, help='Random seed.')
 parser.add_argument('--epochs', type=int, default=200, help='Number of epochs to train.')
 parser.add_argument('--hidden1', type=int, default=32, help='Number of units in hidden layer 1.')
@@ -50,6 +50,13 @@ def get_roc_score(emb, adj_orig, edges_pos, edges_neg):
     return roc_score, ap_score
 
 def train(args):
+    if args.model == 'vgae':
+        model_class = VGAE
+    elif args.model == 'gae':
+        model_class = GAE
+    else:
+        raise ValueError(f'Unknown model {args.model}')
+
     print("Using {} dataset".format(args.dataset_str))
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -84,7 +91,10 @@ def train(args):
     norm = adj.shape[0] * adj.shape[0] / float(
         (adj.shape[0] * adj.shape[0] - adj.sum()) * 2)
 
-    model = VGAE(feat_dim, args.hidden1, args.hidden2, pos_weight).to(device)
+    model = model_class(feat_dim,
+                        args.hidden1,
+                        args.hidden2,
+                        pos_weight).to(device)
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
     hidden_emb = None
@@ -114,8 +124,7 @@ def train(args):
     print('Test ROC score: ' + str(roc_score))
     print('Test AP score: ' + str(ap_score))
 
-    torch.save(model.state_dict(), osp.join('saved', f'vgae-{dataset}.p'))
-
+    torch.save(model.state_dict(), osp.join('saved', f'{args.model}-{dataset}.p'))
 
 if __name__ == '__main__':
     train(args)
