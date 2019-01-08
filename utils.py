@@ -1,6 +1,7 @@
 import numpy as np
 import scipy.sparse as sp
 from sklearn.metrics import roc_auc_score, average_precision_score
+import torch
 
 # Source: https://github.com/tkipf/gae
 def sparse_to_tuple(sparse_mx):
@@ -120,12 +121,16 @@ def get_roc_scores(adj_pred, adj_orig, edges_pos=None, edges_neg=None):
     return roc_score, ap_score
 
 # Source: https://stackoverflow.com/questions/50665681
-def sample_zero_entries(mat):
-    """A generator to obtain zero entries from a sparse matrix"""
-    nonzero_or_sampled = set(zip(*mat.nonzero()))
+def sample_zero_entries(edges):
+    """A generator to obtain negative edges from positive edges.
+    Args:
+        - edges: numpy array of size (2, N), N is the number of edges
+    """
+    max_node_idx = np.max(edges)
+    nonzero_or_sampled = set(map(tuple, edges.T))
     while True:
-        t = tuple(np.random.randint(0, mat.shape[0], 2))
-        # Don't sample diagonal of the adjacency matrix
+        t = tuple(np.random.randint(0, max_node_idx, 2))
+        # Don't sample self-connections
         if t[0] == t[1]:
             continue
         if t not in nonzero_or_sampled:
@@ -134,34 +139,33 @@ def sample_zero_entries(mat):
             nonzero_or_sampled.add(t)
             nonzero_or_sampled.add((t[1], t[0]))
 
-def split_edges(adj):
+def split_edges(edge_index):
     """Obtain positive and negative train/val/test edges for an *undirected*
     graph given its symmetric adjacency matrix.
+    Args:
+        - edge_index: tensor, (2, N), N is the number of edges.
     """
-    # Remove diagonal elements
-    adj = adj - sp.dia_matrix((adj.diagonal()[np.newaxis, :], [0]),
-                               shape=adj.shape)
-    adj.eliminate_zeros()
-
-    adj_triu = sp.triu(adj)
-    adj_tuple = sparse_to_tuple(adj_triu)
-    edges = adj_tuple[0]
-    num_test = int(np.floor(edges.shape[0] / 10.))
-    num_val = int(np.floor(edges.shape[0] / 20.))
+    # Ensure edges in both directions
+    edges_inv = torch.stack((edge_index[1], edge_index[0]), dim=0)
+    edges = torch.cat((edge_index, edges_inv), dim=1).numpy()
+    # Leave edges in one direction only
+    edges = np.unique(edges, axis=1)
+    num_test = int(np.floor(edges.shape[1] / 10.))
+    num_val = int(np.floor(edges.shape[1] / 20.))
 
     # Shuffle edges
-    all_edge_idx = np.arange(edges.shape[0])
+    all_edge_idx = np.arange(edges.shape[1])
     np.random.shuffle(all_edge_idx)
 
     val_edge_idx = all_edge_idx[:num_val]
     test_edge_idx = all_edge_idx[num_val:(num_val + num_test)]
-    test_edges = edges[test_edge_idx]
-    val_edges = edges[val_edge_idx]
+    test_edges = edges[:, test_edge_idx]
+    val_edges = edges[:, val_edge_idx]
     train_edges = np.delete(edges, np.hstack([test_edge_idx, val_edge_idx]),
-                            axis=0)
+                            axis=1)
 
     # Sample zero entries without replacement
-    zero_iterator = sample_zero_entries(adj)
+    zero_iterator = sample_zero_entries(edges)
 
     # NOTE: these edge lists only contain single direction of edge!
     positive_splits = [train_edges, val_edges, test_edges]
@@ -169,8 +173,8 @@ def split_edges(adj):
 
     for i in range(len(positive_splits)):
         negative_edges = np.empty(positive_splits[i].shape, dtype=np.int32)
-        for j in range(negative_edges.shape[0]):
-            negative_edges[j] = next(zero_iterator)
+        for j in range(negative_edges.shape[1]):
+            negative_edges[:, j] = next(zero_iterator)
 
         negative_splits.append(negative_edges)
 
