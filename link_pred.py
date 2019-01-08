@@ -11,7 +11,7 @@ from sklearn.model_selection import ParameterGrid
 from sklearn.metrics import roc_auc_score, average_precision_score
 
 from utils import split_edges, adj_from_edge_index
-from models import Infomax, DotLinkPredictor, BilinearLinkPredictor,\
+from models import DGI, DotLinkPredictor, BilinearLinkPredictor,\
     MLPLinkPredictor, VGAE, GAE
 
 def log_stats(roc_results, ap_results, logdir, metadata_dict):
@@ -100,7 +100,7 @@ def train(model_name, dataset, encoder_name, n_experiments, epochs, **hparams):
     # Load pretrained encoder
     if encoder_name == 'dgi':
         emb_dim = 512
-        infomax = Infomax(data.num_features, emb_dim)
+        infomax = DGI(data.num_features, emb_dim)
         infomax.load_state_dict(torch.load(osp.join('saved',
                                                     f'{encoder_name}-{dataset}.p'),
                                            map_location='cpu'))

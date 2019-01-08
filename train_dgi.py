@@ -6,7 +6,7 @@ from torch_geometric.datasets import Planetoid
 import torch
 import numpy as np
 
-from models import NodeClassifier, Infomax, VGAE, GAE
+from models import NodeClassifier, DGI, VGAE, GAE
 from utils import adj_from_edge_index, split_edges
 
 parser = ArgumentParser()
@@ -50,7 +50,7 @@ data = data.to(device)
 
 if load is None:
     hidden_dim = 512
-    model = Infomax(data.num_features, hidden_dim).to(device)
+    model = DGI(data.num_features, hidden_dim).to(device)
 
     infomax_optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
@@ -63,7 +63,7 @@ if load is None:
     torch.save(model.state_dict(), osp.join('saved', f'dgi-{dataset}.p'))
 elif load == 'dgi':
     hidden_dim = 512
-    model = Infomax(data.num_features, hidden_dim).to(device)
+    model = DGI(data.num_features, hidden_dim).to(device)
     model.load_state_dict(torch.load(osp.join('saved', f'{load}-{dataset}.p'),
                                            map_location='cpu'))
 elif load == 'vgae':
