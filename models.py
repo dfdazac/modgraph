@@ -36,9 +36,9 @@ class Discriminator(nn.Module):
         x = torch.matmul(x, torch.matmul(self.weight, summary))
         return x
 
-class Infomax(nn.Module):
+class DGI(nn.Module):
     def __init__(self, input_dim, hidden_dim):
-        super(Infomax, self).__init__()
+        super(DGI, self).__init__()
         self.encoder = Encoder(input_dim, hidden_dim)
         self.discriminator = Discriminator(hidden_dim)
         self.loss = nn.BCEWithLogitsLoss()
