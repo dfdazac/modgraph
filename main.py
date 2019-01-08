@@ -5,22 +5,55 @@ import torch
 import numpy as np
 from torch_geometric.datasets import Planetoid
 
-from utils import adj_from_edge_index, split_edges
+from utils import split_edges, add_reverse_edges
+from models import GAE, DGI
 
-def train_encoder(model_name, dataset):
+def train_encoder(args):
     now = datetime.now().strftime('%Y-%m-%d-%H%M%S')
     torch.random.manual_seed(42)
     np.random.seed(42)
 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    if not torch.cuda.is_available() and args.device.startswith('cuda'):
+        raise ValueError(f'Device {args.device} specified '
+                         'but CUDA is not available')
+
+    device = torch.device(args.device)
 
     # Load data
-    path = osp.join(osp.dirname(osp.realpath(__file__)), 'data', dataset)
-    data = Planetoid(path, dataset)[0]
+    path = osp.join(osp.dirname(osp.realpath(__file__)), 'data', args.dataset)
+    data = Planetoid(path, args.dataset)[0]
     # Obtain edges for the link prediction task
     positive_splits, negative_splits = split_edges(data.edge_index)
     train_pos, val_pos, test_pos = positive_splits
     train_neg, val_neg, test_neg = negative_splits
+    # Add edges in reverse direction for encoding
+    train_pos = add_reverse_edges(train_pos)
 
-train_encoder('gae', 'cora')
+    # Create model
+    if args.model_name == 'dgi':
+        model = DGI(data.num_features, args.hidden_dim)
+
+    # Train model
+    print(f'Training {args.model_name}')
+    model.to(device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+    for epoch in range(1, args.epochs + 1):
+        model.train()
+        optimizer.zero_grad()
+        loss = model(data, train_pos)
+        loss.backward()
+        optimizer.step()
+
+        print('Epoch: {:03d}, Loss: {:.7f}'.format(epoch, loss))
+
+from argparse import Namespace
+args = Namespace()
+args.model_name = 'dgi'
+args.dataset = 'cora'
+args.hidden_dim = 512
+args.lr = 0.001
+args.epochs = 10
+args.device = 'cpu'
+
+train_encoder(args)
 
