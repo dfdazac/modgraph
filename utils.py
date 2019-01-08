@@ -183,6 +183,11 @@ def split_edges(edge_index):
     return positive_splits, negative_splits
 
 def add_reverse_edges(edges):
+    """Add edges in the reverse direction to a tensor containing edges in
+    one direction only.
+    Args:
+        - edges: tensor, (2, N), N is the number of edges.
+    """
     edges_inv = torch.stack((edges[1], edges[0]), dim=0)
     all_edges = torch.cat((edges, edges_inv), dim=1)
     return all_edges
