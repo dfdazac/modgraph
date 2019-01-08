@@ -168,9 +168,9 @@ def split_edges(edge_index):
     zero_iterator = sample_zero_entries(adj)
 
     # NOTE: these edge lists only contain single direction of edge!
-    positive_splits = [torch.tensor(train_edges.T),
-                       torch.tensor(val_edges.T),
-                       torch.tensor(test_edges.T)]
+    positive_splits = [torch.tensor(train_edges.T, dtype=torch.long),
+                       torch.tensor(val_edges.T, dtype=torch.long),
+                       torch.tensor(test_edges.T, dtype=torch.long)]
     negative_splits = []
 
     for i in range(len(positive_splits)):
@@ -178,7 +178,7 @@ def split_edges(edge_index):
         for j in range(negative_edges.shape[0]):
             negative_edges[:, j] = next(zero_iterator)
 
-        negative_splits.append(torch.tensor(negative_edges.T))
+        negative_splits.append(torch.tensor(negative_edges.T, dtype=torch.long))
 
     return positive_splits, negative_splits
 
