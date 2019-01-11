@@ -175,10 +175,10 @@ def split_edges(edge_index):
 
     for i in range(len(positive_splits)):
         negative_edges = np.empty(positive_splits[i].shape, dtype=np.int32)
-        for j in range(negative_edges.shape[0]):
+        for j in range(negative_edges.shape[1]):
             negative_edges[:, j] = next(zero_iterator)
 
-        negative_splits.append(torch.tensor(negative_edges.T, dtype=torch.long))
+        negative_splits.append(torch.tensor(negative_edges, dtype=torch.long))
 
     return positive_splits, negative_splits
 
