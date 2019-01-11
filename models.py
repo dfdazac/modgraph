@@ -124,20 +124,30 @@ class VGAE(nn.Module):
         return cost + KLD, mu
 
 class GraphEncoder(nn.Module):
-    def __init__(self, input_feat_dim, hidden_dim1, hidden_dim2):
+    def __init__(self, input_feat_dim, hidden_dims):
         super(GraphEncoder, self).__init__()
-        self.gc1 = GCNConv(input_feat_dim, hidden_dim1, bias=False)
-        self.gc2 = GCNConv(hidden_dim1, hidden_dim2, bias=False)
+
+        self.layers = nn.ModuleList([GCNConv(input_feat_dim, hidden_dims[0],
+                                             bias=False),
+                                     nn.PReLU(hidden_dims[0])])
+
+        for i in range(1, len(hidden_dims)):
+            self.layers.append(GCNConv(hidden_dims[i - 1], hidden_dims[i],
+                                       bias=False))
+            self.layers.append(nn.PReLU(hidden_dims[i]))
 
     def forward(self, data, edge_index):
-        hidden1 = F.relu(self.gc1(data.x, edge_index))
-        z = self.gc2(hidden1, edge_index)
+        z = self.layers[1](self.layers[0](data.x, edge_index))
+
+        for i in range(2, len(self.layers), 2):
+            z = self.layers[i + 1](self.layers[i](z, edge_index))
+
         return z
 
 class GAE(nn.Module):
-    def __init__(self, input_feat_dim, hidden_dim1, hidden_dim2):
+    def __init__(self, input_feat_dim, hidden_dims):
         super(GAE, self).__init__()
-        self.encoder = GraphEncoder(input_feat_dim, hidden_dim1, hidden_dim2)
+        self.encoder = GraphEncoder(input_feat_dim, hidden_dims)
         self.decoder = InnerProductDecoder()
         self.loss_fn = nn.BCEWithLogitsLoss()
 
