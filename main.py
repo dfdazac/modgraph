@@ -2,13 +2,14 @@ from datetime import datetime
 import os.path as osp
 
 import torch
+import torch.nn.functional as F
 import numpy as np
 from torch_geometric.datasets import Planetoid
 from sklearn.metrics import roc_auc_score, average_precision_score
 from tensorboardX import SummaryWriter
 
 from utils import split_edges, add_reverse_edges
-from models import GAE, DGI
+from models import GAE, DGI, NodeClassifier
 
 def eval_link_prediction(emb, edges_pos, edges_neg):
     """Evaluate the AUC and AP scores when using the provided embeddings to
@@ -105,18 +106,49 @@ def train_encoder(args):
 
     # Evaluate on test edges
     model.load_state_dict(torch.load(osp.join(ckpt_path)))
+    model.eval()
     embeddings = model.encoder(data, train_pos).cpu().detach()
     auc, ap = eval_link_prediction(embeddings, test_pos, test_neg)
     print('test_auc: {:6f}, test_ap: {:6f}'.format(auc, ap))
 
     # Evaluate embeddings in node classification
+    classifier = NodeClassifier(model.encoder,
+                                args.hidden_dims[-1],
+                                data.num_classes).to(device)
+
+    classifier_optimizer = torch.optim.Adam(classifier.parameters(), lr=0.01)
+
+    def train_classifier():
+        classifier.train()
+        classifier_optimizer.zero_grad()
+        output = classifier(data)
+        loss = F.nll_loss(output[data.train_mask], data.y[data.train_mask])
+        loss.backward()
+        classifier_optimizer.step()
+        return loss.item()
+
+    def test_classifier():
+        classifier.eval()
+        logits, accs = classifier(data), []
+        for _, mask in data('train_mask', 'val_mask', 'test_mask'):
+            pred = logits[mask].max(1)[1]
+            acc = pred.eq(data.y[mask]).sum().item() / mask.sum().item()
+            accs.append(acc)
+        return accs
+
+    print('Train logistic regression classifier.')
+    for epoch in range(1, 51):
+        train_classifier()
+        accs = test_classifier()
+        log = 'Epoch: {:02d}, Train: {:.4f}, Val: {:.4f}, Test: {:.4f}'
+        print(log.format(epoch, *accs))
 
 
 from argparse import Namespace
 args = Namespace()
 args.model_name = 'dgi'
 args.dataset = 'cora'
-args.hidden_dims = [32, 16]
+args.hidden_dims = [512]
 args.lr = 0.001
 args.epochs = 200
 args.device = 'cpu'
