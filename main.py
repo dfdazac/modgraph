@@ -5,6 +5,7 @@ import torch
 import numpy as np
 from torch_geometric.datasets import Planetoid
 from sklearn.metrics import roc_auc_score, average_precision_score
+from tensorboardX import SummaryWriter
 
 from utils import split_edges, add_reverse_edges
 from models import GAE, DGI
@@ -67,8 +68,12 @@ def train_encoder(args):
     model = model_class(data.num_features, args.hidden_dims).to(device)
 
     # Train model
+    logdir = osp.join('runs', f'{now}')
+    writer = SummaryWriter(logdir)
     print(f'Training {args.model_name}')
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+    best_auc = 0
+    patience_count = 0
     for epoch in range(1, args.epochs + 1):
         model.train()
         optimizer.zero_grad()
@@ -77,11 +82,27 @@ def train_encoder(args):
         optimizer.step()
 
         # Evaluate
-        embeddings = model.encoder(data, train_pos).detach()
+        embeddings = model.encoder(data, train_pos).cpu().detach()
         auc, ap = eval_link_prediction(embeddings, val_pos, val_neg)
-        print('Epoch: {:03d}, train loss: {:.6f}, val_auc: {:6f}, val_ap: {:6f}'.format(epoch,
-                                                                                        loss.item(),
-                                                                                        auc, ap))
+        print('[{:03d}/{:03d}] train loss: {:.6f}, '
+              'val_auc: {:6f}, val_ap: {:6f}'.format(epoch,
+                                                      args.epochs,
+                                                      loss.item(),
+                                                      auc, ap))
+
+        if auc > best_auc:
+            # Keep best model on val set
+            best_auc = auc
+            patience_count = 0
+            torch.save(model.state_dict(),
+                       osp.join(logdir, 'checkpoint.p'))
+        else:
+            # Terminate early based on patience
+            patience_count += 1
+            if patience_count == args.patience:
+                print('Terminating early')
+                break
+
 
 from argparse import Namespace
 args = Namespace()
@@ -91,6 +112,7 @@ args.hidden_dims = [32, 16]
 args.lr = 0.001
 args.epochs = 200
 args.device = 'cpu'
+args.patience = 20
 
 train_encoder(args)
 
