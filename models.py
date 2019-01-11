@@ -37,10 +37,10 @@ class Discriminator(nn.Module):
         return x
 
 class DGI(nn.Module):
-    def __init__(self, input_dim, hidden_dim):
+    def __init__(self, input_dim, hidden_dims):
         super(DGI, self).__init__()
-        self.encoder = Encoder(input_dim, hidden_dim)
-        self.discriminator = Discriminator(hidden_dim)
+        self.encoder = GraphEncoder(input_dim, hidden_dims)
+        self.discriminator = Discriminator(hidden_dims[-1])
         self.loss = nn.BCEWithLogitsLoss()
 
     def forward(self, data, edges_pos, edges_neg):
@@ -136,8 +136,14 @@ class GraphEncoder(nn.Module):
                                        bias=False))
             self.layers.append(nn.PReLU(hidden_dims[i]))
 
-    def forward(self, data, edge_index):
-        z = self.layers[1](self.layers[0](data.x, edge_index))
+    def forward(self, data, edge_index, corrupt=False):
+        if corrupt:
+            perm = torch.randperm(data.num_nodes)
+            x = data.x[perm]
+        else:
+            x = data.x
+
+        z = self.layers[1](self.layers[0](x, edge_index))
 
         for i in range(2, len(self.layers), 2):
             z = self.layers[i + 1](self.layers[i](z, edge_index))

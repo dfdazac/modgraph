@@ -32,13 +32,16 @@ def train_encoder(args):
 
     # Create model
     if args.model_name == 'dgi':
-        model = DGI(data.num_features, args.hidden_dim)
+        model_class = DGI
     elif args.model_name == 'gae':
-        model = GAE(data.num_features, 32, 16)
+        model_class = GAE
+    else:
+        raise ValueError(f'Unknown model {args.model_name}')
+
+    model = model_class(data.num_features, args.hidden_dims).to(device)
 
     # Train model
     print(f'Training {args.model_name}')
-    model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     for epoch in range(1, args.epochs + 1):
         model.train()
@@ -53,7 +56,7 @@ from argparse import Namespace
 args = Namespace()
 args.model_name = 'dgi'
 args.dataset = 'cora'
-args.hidden_dim = 512
+args.hidden_dims = [32, 16]
 args.lr = 0.001
 args.epochs = 10
 args.device = 'cpu'
