@@ -69,6 +69,7 @@ def train_encoder(args):
 
     # Train model
     logdir = osp.join('runs', f'{now}')
+    ckpt_path = osp.join(logdir, 'checkpoint.p')
     writer = SummaryWriter(logdir)
     print(f'Training {args.model_name}')
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
@@ -81,7 +82,7 @@ def train_encoder(args):
         loss.backward()
         optimizer.step()
 
-        # Evaluate
+        # Evaluate on val edges
         embeddings = model.encoder(data, train_pos).cpu().detach()
         auc, ap = eval_link_prediction(embeddings, val_pos, val_neg)
         print('[{:03d}/{:03d}] train loss: {:.6f}, '
@@ -94,8 +95,7 @@ def train_encoder(args):
             # Keep best model on val set
             best_auc = auc
             patience_count = 0
-            torch.save(model.state_dict(),
-                       osp.join(logdir, 'checkpoint.p'))
+            torch.save(model.state_dict(), ckpt_path)
         else:
             # Terminate early based on patience
             patience_count += 1
@@ -103,10 +103,18 @@ def train_encoder(args):
                 print('Terminating early')
                 break
 
+    # Evaluate on test edges
+    model.load_state_dict(torch.load(osp.join(ckpt_path)))
+    embeddings = model.encoder(data, train_pos).cpu().detach()
+    auc, ap = eval_link_prediction(embeddings, test_pos, test_neg)
+    print('test_auc: {:6f}, test_ap: {:6f}'.format(auc, ap))
+
+    # Evaluate embeddings in node classification
+
 
 from argparse import Namespace
 args = Namespace()
-args.model_name = 'gae'
+args.model_name = 'dgi'
 args.dataset = 'cora'
 args.hidden_dims = [32, 16]
 args.lr = 0.001
