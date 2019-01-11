@@ -43,9 +43,9 @@ class DGI(nn.Module):
         self.discriminator = Discriminator(hidden_dim)
         self.loss = nn.BCEWithLogitsLoss()
 
-    def forward(self, data, edge_index):
-        positive = self.encoder(data, edge_index, corrupt=False)
-        negative = self.encoder(data, edge_index, corrupt=True)
+    def forward(self, data, edges_pos, edges_neg):
+        positive = self.encoder(data, edges_pos, corrupt=False)
+        negative = self.encoder(data, edges_pos, corrupt=True)
         summary = torch.sigmoid(positive.mean(dim=0))
 
         positive = self.discriminator(positive, summary)
@@ -129,24 +129,30 @@ class GraphEncoder(nn.Module):
         self.gc1 = GCNConv(input_feat_dim, hidden_dim1, bias=False)
         self.gc2 = GCNConv(hidden_dim1, hidden_dim2, bias=False)
 
-    def forward(self, data, edge_index, return_moments=False, **kwargs):
+    def forward(self, data, edge_index):
         hidden1 = F.relu(self.gc1(data.x, edge_index))
         z = self.gc2(hidden1, edge_index)
         return z
 
 class GAE(nn.Module):
-    def __init__(self, input_feat_dim, hidden_dim1, hidden_dim2, pos_weight):
+    def __init__(self, input_feat_dim, hidden_dim1, hidden_dim2):
         super(GAE, self).__init__()
         self.encoder = GraphEncoder(input_feat_dim, hidden_dim1, hidden_dim2)
         self.decoder = InnerProductDecoder()
-        self.loss_fn = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+        self.loss_fn = nn.BCEWithLogitsLoss()
 
-    def forward(self, data, edge_index, adj_label, norm):
-        z = self.encoder(data, edge_index, return_moments=True)
-        x = self.decoder(z)
-        cost = norm * self.loss_fn(x, adj_label)
+    def forward(self, data, edges_pos, edges_neg):
+        z = self.encoder(data, edges_pos)
+        # Get scores for edges using inner product
+        pos_score = (z[edges_pos[0]] * z[edges_pos[1]]).sum(dim=1)
+        neg_score = (z[edges_neg[0]] * z[edges_neg[1]]).sum(dim=1)
+        preds = torch.cat((pos_score, neg_score))
 
-        return cost, z
+        targets = torch.cat((torch.ones_like(pos_score),
+                             torch.zeros_like(neg_score)))
+        cost = self.loss_fn(preds, targets)
+
+        return cost
 
 class NodeClassifier(nn.Module):
     def __init__(self, encoder, hidden_dim, num_classes):

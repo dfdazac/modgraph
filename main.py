@@ -27,11 +27,14 @@ def train_encoder(args):
     train_pos, val_pos, test_pos = positive_splits
     train_neg, val_neg, test_neg = negative_splits
     # Add edges in reverse direction for encoding
-    train_pos = add_reverse_edges(train_pos)
+    train_pos = add_reverse_edges(train_pos).to(device)
+    train_neg = add_reverse_edges(train_neg).to(device)
 
     # Create model
     if args.model_name == 'dgi':
         model = DGI(data.num_features, args.hidden_dim)
+    elif args.model_name == 'gae':
+        model = GAE(data.num_features, 32, 16)
 
     # Train model
     print(f'Training {args.model_name}')
@@ -40,7 +43,7 @@ def train_encoder(args):
     for epoch in range(1, args.epochs + 1):
         model.train()
         optimizer.zero_grad()
-        loss = model(data, train_pos)
+        loss = model(data, train_pos, train_neg)
         loss.backward()
         optimizer.step()
 
