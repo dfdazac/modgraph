@@ -4,9 +4,35 @@ import os.path as osp
 import torch
 import numpy as np
 from torch_geometric.datasets import Planetoid
+from sklearn.metrics import roc_auc_score, average_precision_score
 
 from utils import split_edges, add_reverse_edges
 from models import GAE, DGI
+
+def eval_link_prediction(emb, edges_pos, edges_neg):
+    """Evaluate the AUC and AP scores when using the provided embeddings to
+    predict links between nodes.
+    Args:
+        - emb: tensor of shape (N, d) where N is the number of nodes and d
+            the dimension of the embeddings.
+        - edges_pos, edges_neg: tensors of shape (2, p) containing positive
+        and negative edges, respectively, in their columns.
+    Returns:
+        - auc_score, float
+        - ap_score, float
+    """
+    # Get scores for edges using inner product
+    pos_score = (emb[edges_pos[0]] * emb[edges_pos[1]]).sum(dim=1)
+    neg_score = (emb[edges_neg[0]] * emb[edges_neg[1]]).sum(dim=1)
+    preds = torch.cat((pos_score, neg_score)).cpu().numpy()
+
+    targets = torch.cat((torch.ones_like(pos_score),
+                         torch.zeros_like(neg_score))).cpu().numpy()
+
+    auc_score = roc_auc_score(targets, preds)
+    ap_score = average_precision_score(targets, preds)
+
+    return auc_score, ap_score
 
 def train_encoder(args):
     now = datetime.now().strftime('%Y-%m-%d-%H%M%S')
@@ -50,15 +76,20 @@ def train_encoder(args):
         loss.backward()
         optimizer.step()
 
-        print('Epoch: {:03d}, Loss: {:.7f}'.format(epoch, loss))
+        # Evaluate
+        embeddings = model.encoder(data, train_pos).detach()
+        auc, ap = eval_link_prediction(embeddings, val_pos, val_neg)
+        print('Epoch: {:03d}, train loss: {:.6f}, val_auc: {:6f}, val_ap: {:6f}'.format(epoch,
+                                                                                        loss.item(),
+                                                                                        auc, ap))
 
 from argparse import Namespace
 args = Namespace()
-args.model_name = 'dgi'
+args.model_name = 'gae'
 args.dataset = 'cora'
 args.hidden_dims = [32, 16]
 args.lr = 0.001
-args.epochs = 10
+args.epochs = 200
 args.device = 'cpu'
 
 train_encoder(args)
