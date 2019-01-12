@@ -55,6 +55,7 @@ def train_encoder(model_name, device, dataset, hidden_dims, lr, epochs,
     path = osp.join(osp.dirname(osp.realpath(__file__)), 'data', dataset)
     dataset = Planetoid(path, dataset)
     data = dataset[0]
+    data.x = data.x.to(device)
     # Obtain edges for the link prediction task
     positive_splits, negative_splits = split_edges(data.edge_index)
     train_pos, val_pos, test_pos = positive_splits
@@ -84,6 +85,8 @@ def train_encoder(model_name, device, dataset, hidden_dims, lr, epochs,
     for epoch in range(1, epochs + 1):
         model.train()
         optimizer.zero_grad()
+        print(train_pos.device)
+        print(train_neg.device)
         loss = model(data, train_pos, train_neg)
         loss.backward()
         optimizer.step()
@@ -117,6 +120,8 @@ def train_encoder(model_name, device, dataset, hidden_dims, lr, epochs,
     print('\ntest_auc: {:6f}, test_ap: {:6f}'.format(auc, ap))
 
     # Evaluate embeddings in node classification
+    del train_pos, train_neg
+    data = data.to(device)
     classifier = NodeClassifier(model.encoder,
                                 hidden_dims[-1],
                                 dataset.num_classes).to(device)
