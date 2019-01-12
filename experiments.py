@@ -10,7 +10,7 @@ config = {'model_name': None,
           'dataset': None,
           'hidden_dims': None,
           'lr': None,
-          'epochs': 2,
+          'epochs': 200,
           'patience': 20,
           'random_splits': True}
 
@@ -28,5 +28,5 @@ for i, hparams in enumerate(grid):
         config['device'] = 'cpu'
     else:
         config['device'] = device
-    
+
     ex.run(config_updates=config)
