@@ -8,6 +8,8 @@ import numpy as np
 from torch_geometric.datasets import Planetoid
 from sklearn.metrics import roc_auc_score, average_precision_score
 from tensorboardX import SummaryWriter
+from sacred import Experiment
+from sacred.observers import MongoObserver
 
 from utils import split_edges, add_reverse_edges
 from models import GAE, DGI, NodeClassifier
@@ -16,7 +18,7 @@ from models import GAE, DGI, NodeClassifier
 def eval_link_prediction(emb, edges_pos, edges_neg):
     """Evaluate the AUC and AP scores when using the provided embeddings to
     predict links between nodes.
-    Args:
+
         - emb: tensor of shape (N, d) where N is the number of nodes and d
             the dimension of the embeddings.
         - edges_pos, edges_neg: tensors of shape (2, p) containing positive
@@ -39,18 +41,19 @@ def eval_link_prediction(emb, edges_pos, edges_neg):
     return auc_score, ap_score
 
 
-def train_encoder(args):
+def train_encoder(model_name, device, dataset, hidden_dims, lr, epochs,
+                  patience, random_splits):
     now = datetime.now().strftime('%Y-%m-%d-%H%M%S')
 
-    if not torch.cuda.is_available() and args.device.startswith('cuda'):
-        raise ValueError(f'Device {args.device} specified '
+    if not torch.cuda.is_available() and device.startswith('cuda'):
+        raise ValueError(f'Device {device} specified '
                          'but CUDA is not available')
 
-    device = torch.device(args.device)
+    device = torch.device(device)
 
     # Load data
-    path = osp.join(osp.dirname(osp.realpath(__file__)), 'data', args.dataset)
-    dataset = Planetoid(path, args.dataset)
+    path = osp.join(osp.dirname(osp.realpath(__file__)), 'data', dataset)
+    dataset = Planetoid(path, dataset)
     data = dataset[0]
     # Obtain edges for the link prediction task
     positive_splits, negative_splits = split_edges(data.edge_index)
@@ -61,24 +64,24 @@ def train_encoder(args):
     train_neg = add_reverse_edges(train_neg).to(device)
 
     # Create model
-    if args.model_name == 'dgi':
+    if model_name == 'dgi':
         model_class = DGI
-    elif args.model_name == 'gae':
+    elif model_name == 'gae':
         model_class = GAE
     else:
-        raise ValueError(f'Unknown model {args.model_name}')
+        raise ValueError(f'Unknown model {model_name}')
 
-    model = model_class(dataset.num_features, args.hidden_dims).to(device)
+    model = model_class(dataset.num_features, hidden_dims).to(device)
 
     # Train model
     logdir = osp.join('runs', f'{now}')
     ckpt_path = osp.join(logdir, 'checkpoint.p')
     writer = SummaryWriter(logdir)
-    print(f'Training {args.model_name}')
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+    print(f'Training {model_name}')
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     best_auc = 0
     patience_count = 0
-    for epoch in range(1, args.epochs + 1):
+    for epoch in range(1, epochs + 1):
         model.train()
         optimizer.zero_grad()
         loss = model(data, train_pos, train_neg)
@@ -90,7 +93,7 @@ def train_encoder(args):
         auc, ap = eval_link_prediction(embeddings, val_pos, val_neg)
         print('\r[{:03d}/{:03d}] train loss: {:.6f}, '
               'val_auc: {:6f}, val_ap: {:6f}'.format(epoch,
-                                                      args.epochs,
+                                                      epochs,
                                                       loss.item(),
                                                       auc, ap),
               end='', flush=True)
@@ -103,7 +106,7 @@ def train_encoder(args):
         else:
             # Terminate early based on patience
             patience_count += 1
-            if patience_count == args.patience:
+            if patience_count == patience:
                 break
 
     # Evaluate on test edges
@@ -115,12 +118,12 @@ def train_encoder(args):
 
     # Evaluate embeddings in node classification
     classifier = NodeClassifier(model.encoder,
-                                args.hidden_dims[-1],
+                                hidden_dims[-1],
                                 dataset.num_classes).to(device)
 
     classifier_optimizer = torch.optim.Adam(classifier.parameters(), lr=0.001)
 
-    if args.random_splits:
+    if random_splits:
         # Generate new random masks
         num_labels_all = sum(map(lambda x: x[1].sum().item(),
                              data('train_mask', 'val_mask', 'test_mask')))
@@ -177,7 +180,7 @@ def train_encoder(args):
         else:
             # Terminate early based on patience
             patience_count += 1
-            if patience_count == args.patience:
+            if patience_count == patience:
                 break
 
     log = '\nBest validation results\nTrain: {:.4f}, Val: {:.4f}, Test: {:.4f}'
@@ -187,14 +190,35 @@ def train_encoder(args):
     return auc, ap, test_acc
 
 
-def run_experiments(args, n_exper):
+ex = Experiment()
+ex.observers.append(MongoObserver.create(url='mongodb://daniel:daniel1@ds151814.mlab.com:51814/experiments',
+                                         db_name='experiments'))
+
+
+@ex.config
+def config():
+    model_name = 'gae'
+    device = 'cpu'
+    dataset = 'cora'
+    hidden_dims = [32, 16]
+    lr = 0.001
+    epochs = 200
+    patience = 20
+    random_splits = True
+
+
+@ex.automain
+def run_experiments(model_name, device, dataset, hidden_dims, lr, epochs,
+                    patience, random_splits, _run):
     torch.random.manual_seed(42)
     np.random.seed(42)
+    n_exper = 10
     results = np.empty([n_exper, 3])
 
-    for i in range(n_exper):
+    for i in range(10):
         print('\nExperiment {:d}/{:d}'.format(i + 1, n_exper))
-        results[i] = train_encoder(args)
+        results[i] = train_encoder(model_name, device, dataset, hidden_dims,
+                                   lr, epochs, patience, random_splits)
 
     mean = np.mean(results, axis=0)
     std = np.std(results, axis=0)
@@ -206,16 +230,5 @@ def run_experiments(args, n_exper):
         print('{}: {:.1f} ± {:.2f}'.format(metrics[i],
                                            mean[i] * 100,
                                            std[i] * 100))
-
-
-args = Namespace()
-args.model_name = 'dgi'
-args.dataset = 'cora'
-args.hidden_dims = [32, 16]
-args.lr = 0.001
-args.epochs = 200
-args.device = 'cpu'
-args.patience = 20
-args.random_splits = False
-
-run_experiments(args, 3)
+        ex.log_scalar(f'{metrics[i]} mean', mean[i])
+        ex.log_scalar(f'{metrics[i]} std', std[i])
