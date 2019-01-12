@@ -49,7 +49,8 @@ def train_encoder(args):
 
     # Load data
     path = osp.join(osp.dirname(osp.realpath(__file__)), 'data', args.dataset)
-    data = Planetoid(path, args.dataset)[0]
+    dataset = Planetoid(path, args.dataset)
+    data = dataset[0]
     # Obtain edges for the link prediction task
     positive_splits, negative_splits = split_edges(data.edge_index)
     train_pos, val_pos, test_pos = positive_splits
@@ -66,7 +67,7 @@ def train_encoder(args):
     else:
         raise ValueError(f'Unknown model {args.model_name}')
 
-    model = model_class(data.num_features, args.hidden_dims).to(device)
+    model = model_class(dataset.num_features, args.hidden_dims).to(device)
 
     # Train model
     logdir = osp.join('runs', f'{now}')
@@ -114,7 +115,7 @@ def train_encoder(args):
     # Evaluate embeddings in node classification
     classifier = NodeClassifier(model.encoder,
                                 args.hidden_dims[-1],
-                                data.num_classes).to(device)
+                                dataset.num_classes).to(device)
 
     classifier_optimizer = torch.optim.Adam(classifier.parameters(), lr=0.001)
 
@@ -167,9 +168,9 @@ def train_encoder(args):
 
 from argparse import Namespace
 args = Namespace()
-args.model_name = 'dgi'
+args.model_name = 'gae'
 args.dataset = 'cora'
-args.hidden_dims = [512]
+args.hidden_dims = [32, 16]
 args.lr = 0.001
 args.epochs = 200
 args.device = 'cpu'
