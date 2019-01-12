@@ -116,7 +116,7 @@ def train_encoder(args):
                                 args.hidden_dims[-1],
                                 data.num_classes).to(device)
 
-    classifier_optimizer = torch.optim.Adam(classifier.parameters(), lr=0.01)
+    classifier_optimizer = torch.optim.Adam(classifier.parameters(), lr=0.001)
 
     def train_classifier():
         classifier.train()
@@ -129,7 +129,8 @@ def train_encoder(args):
 
     def test_classifier():
         classifier.eval()
-        logits, accs = classifier(data), []
+        logits = classifier(data)
+        accs = []
         for _, mask in data('train_mask', 'val_mask', 'test_mask'):
             pred = logits[mask].max(1)[1]
             acc = pred.eq(data.y[mask]).sum().item() / mask.sum().item()
@@ -137,12 +138,24 @@ def train_encoder(args):
         return accs
 
     print('Train logistic regression classifier.')
-    for epoch in range(1, 51):
+    best_accs = []
+    best_val_acc = 0
+    for epoch in range(1, 101):
         train_classifier()
         accs = test_classifier()
         log = 'Epoch: {:02d}, Train: {:.4f}, Val: {:.4f}, Test: {:.4f}'
         print(log.format(epoch, *accs))
 
+        val_acc = accs[1]
+        if val_acc > best_val_acc:
+            best_val_acc = val_acc
+            best_accs = accs
+
+    log = 'Best validation results\nTrain: {:.4f}, Val: {:.4f}, Test: {:.4f}'
+    print(log.format(*best_accs))
+    test_acc = best_accs[2]
+
+    return auc, ap, test_acc
 
 from argparse import Namespace
 args = Namespace()
