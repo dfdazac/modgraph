@@ -230,5 +230,5 @@ def run_experiments(model_name, device, dataset, hidden_dims, lr, epochs,
         print('{}: {:.1f} ± {:.2f}'.format(metrics[i],
                                            mean[i] * 100,
                                            std[i] * 100))
-        ex.log_scalar(f'{metrics[i]} mean', mean[i])
-        ex.log_scalar(f'{metrics[i]} std', std[i])
+        _run.log_scalar(f'{metrics[i]} mean', mean[i])
+        _run.log_scalar(f'{metrics[i]} std', std[i])
