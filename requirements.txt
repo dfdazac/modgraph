@@ -4,4 +4,4 @@ torch==0.4.1
 networkx==2.2
 scikit_learn==0.20.0
 tensorboardX==1.4
-torch_geometric==0.3.1
+torch_geometric==1.0.0
