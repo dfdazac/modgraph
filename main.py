@@ -1,5 +1,6 @@
 from datetime import datetime
 import os.path as osp
+from argparse import Namespace
 
 import torch
 import torch.nn.functional as F
@@ -10,6 +11,7 @@ from tensorboardX import SummaryWriter
 
 from utils import split_edges, add_reverse_edges
 from models import GAE, DGI, NodeClassifier
+
 
 def eval_link_prediction(emb, edges_pos, edges_neg):
     """Evaluate the AUC and AP scores when using the provided embeddings to
@@ -35,6 +37,7 @@ def eval_link_prediction(emb, edges_pos, edges_neg):
     ap_score = average_precision_score(targets, preds)
 
     return auc_score, ap_score
+
 
 def train_encoder(args):
     now = datetime.now().strftime('%Y-%m-%d-%H%M%S')
@@ -119,6 +122,26 @@ def train_encoder(args):
 
     classifier_optimizer = torch.optim.Adam(classifier.parameters(), lr=0.001)
 
+    if args.random_splits:
+        # Generate new random masks
+        num_labels_all = sum(map(lambda x: x[1].sum().item(),
+                             data('train_mask', 'val_mask', 'test_mask')))
+        mask_idx = np.random.choice(range(data.num_nodes), num_labels_all,
+                                    replace=False)
+
+        masks = []
+        start = 0
+        for _, mask in data('train_mask', 'val_mask', 'test_mask'):
+            new_mask = torch.zeros_like(mask)
+            num_labels = torch.sum(mask).item()
+            new_mask[mask_idx[start:start + num_labels]] = 1
+            masks.append(new_mask)
+            start += num_labels
+
+        # Reassign label masks
+        for i, (name, _) in enumerate(data('train_mask', 'val_mask', 'test_mask')):
+            setattr(data, name, masks[i])
+
     def train_classifier():
         classifier.train()
         classifier_optimizer.zero_grad()
@@ -166,7 +189,7 @@ def train_encoder(args):
 
     return auc, ap, test_acc
 
-from argparse import Namespace
+
 args = Namespace()
 args.model_name = 'gae'
 args.dataset = 'cora'
@@ -175,6 +198,6 @@ args.lr = 0.001
 args.epochs = 200
 args.device = 'cpu'
 args.patience = 20
+args.random_splits = False
 
 train_encoder(args)
-
