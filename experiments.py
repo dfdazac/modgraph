@@ -28,5 +28,5 @@ for i, hparams in enumerate(grid):
         config['device'] = 'cpu'
     else:
         config['device'] = device
-        
+    
     ex.run(config_updates=config)
