@@ -11,22 +11,16 @@ config = {'model_name': None,
           'hidden_dims': None,
           'lr': None,
           'epochs': 200,
-          'patience': 20,
           'random_splits': True}
 
 # Values to be changed in experiments
 param_grid = {'model_name': ('gae', 'dgi'),
               'dataset': ('cora', 'citeseer', 'pubmed'),
-              'hidden_dims': ([32, 16], [128, 64], [512, 128]),
+              'hidden_dims': ([32], [128], [512]),
               'lr': (0.01, 0.005, 0.001)}
 
 grid = ParameterGrid(param_grid)
 
 for i, hparams in enumerate(grid):
     config.update(hparams)
-    if config['dataset'] == 'pubmed':
-        config['device'] = 'cpu'
-    else:
-        config['device'] = device
-
     ex.run(config_updates=config)

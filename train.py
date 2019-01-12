@@ -1,6 +1,5 @@
 from datetime import datetime
 import os.path as osp
-from argparse import Namespace
 
 import torch
 import torch.nn.functional as F
@@ -42,7 +41,7 @@ def eval_link_prediction(emb, edges_pos, edges_neg):
 
 
 def train_encoder(model_name, device, dataset, hidden_dims, lr, epochs,
-                  patience, random_splits):
+                  random_splits):
     now = datetime.now().strftime('%Y-%m-%d-%H%M%S')
 
     if not torch.cuda.is_available() and device.startswith('cuda'):
@@ -81,12 +80,9 @@ def train_encoder(model_name, device, dataset, hidden_dims, lr, epochs,
     print(f'Training {model_name}')
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     best_auc = 0
-    patience_count = 0
     for epoch in range(1, epochs + 1):
         model.train()
         optimizer.zero_grad()
-        print(train_pos.device)
-        print(train_neg.device)
         loss = model(data, train_pos, train_neg)
         loss.backward()
         optimizer.step()
@@ -104,13 +100,7 @@ def train_encoder(model_name, device, dataset, hidden_dims, lr, epochs,
         if auc > best_auc:
             # Keep best model on val set
             best_auc = auc
-            patience_count = 0
             torch.save(model.state_dict(), ckpt_path)
-        else:
-            # Terminate early based on patience
-            patience_count += 1
-            if patience_count == patience:
-                break
 
     # Evaluate on test edges
     model.load_state_dict(torch.load(osp.join(ckpt_path)))
@@ -169,7 +159,6 @@ def train_encoder(model_name, device, dataset, hidden_dims, lr, epochs,
     print('Training node classifier')
     best_accs = []
     best_val_acc = 0
-    patience_count = 0
     epochs = 100
     for epoch in range(1, epochs + 1):
         train_classifier()
@@ -181,12 +170,6 @@ def train_encoder(model_name, device, dataset, hidden_dims, lr, epochs,
         if val_acc > best_val_acc:
             best_val_acc = val_acc
             best_accs = accs
-            patience_count = 0
-        else:
-            # Terminate early based on patience
-            patience_count += 1
-            if patience_count == patience:
-                break
 
     log = '\nBest validation results\nTrain: {:.4f}, Val: {:.4f}, Test: {:.4f}'
     print(log.format(*best_accs))
@@ -208,22 +191,21 @@ def config():
     hidden_dims = [32, 16]
     lr = 0.001
     epochs = 200
-    patience = 20
     random_splits = True
 
 
 @ex.automain
 def run_experiments(model_name, device, dataset, hidden_dims, lr, epochs,
-                    patience, random_splits, _run):
+                    random_splits, _run):
     torch.random.manual_seed(42)
     np.random.seed(42)
-    n_exper = 10
+    n_exper = 20
     results = np.empty([n_exper, 3])
 
-    for i in range(10):
+    for i in range(n_exper):
         print('\nExperiment {:d}/{:d}'.format(i + 1, n_exper))
         results[i] = train_encoder(model_name, device, dataset, hidden_dims,
-                                   lr, epochs, patience, random_splits)
+                                   lr, epochs, random_splits)
 
     mean = np.mean(results, axis=0)
     std = np.std(results, axis=0)
