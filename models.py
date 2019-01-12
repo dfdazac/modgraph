@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch_geometric.nn import GCNConv
-from torch_geometric.nn.inits import uniform
+from torch_geometric.nn.inits import glorot
 
 class GraphEncoder(nn.Module):
     def __init__(self, input_feat_dim, hidden_dims):
@@ -40,7 +40,7 @@ class Discriminator(nn.Module):
 
     def reset_parameters(self):
         size = self.weight.size(0)
-        uniform(size, self.weight)
+        glorot(self.weight)
 
     def forward(self, x, summary):
         x = torch.matmul(x, torch.matmul(self.weight, summary))
