@@ -5,11 +5,18 @@ import torch.nn.functional as F
 from torch_geometric.nn import GCNConv
 from torch_geometric.nn.inits import uniform
 
-class Encoder(nn.Module):
-    def __init__(self, input_dim, hidden_dim):
-        super(Encoder, self).__init__()
-        self.conv = GCNConv(input_dim, hidden_dim)
-        self.prelu = nn.PReLU(hidden_dim)
+class GraphEncoder(nn.Module):
+    def __init__(self, input_feat_dim, hidden_dims):
+        super(GraphEncoder, self).__init__()
+
+        self.layers = nn.ModuleList([GCNConv(input_feat_dim, hidden_dims[0],
+                                             bias=False),
+                                     nn.PReLU(hidden_dims[0])])
+
+        for i in range(1, len(hidden_dims)):
+            self.layers.append(GCNConv(hidden_dims[i - 1], hidden_dims[i],
+                                       bias=False))
+            self.layers.append(nn.PReLU(hidden_dims[i]))
 
     def forward(self, data, edge_index, corrupt=False):
         if corrupt:
@@ -18,9 +25,12 @@ class Encoder(nn.Module):
         else:
             x = data.x
 
-        x = self.conv(x, edge_index)
-        x = self.prelu(x)
-        return x
+        z = self.layers[1](self.layers[0](x, edge_index))
+
+        for i in range(2, len(self.layers), 2):
+            z = self.layers[i + 1](self.layers[i](z, edge_index))
+
+        return z
 
 class Discriminator(nn.Module):
     def __init__(self, hidden_dim):
@@ -56,6 +66,40 @@ class DGI(nn.Module):
 
         return l1 + l2
 
+class GAE(nn.Module):
+    def __init__(self, input_feat_dim, hidden_dims):
+        super(GAE, self).__init__()
+        self.encoder = GraphEncoder(input_feat_dim, hidden_dims)
+        self.loss_fn = nn.BCEWithLogitsLoss()
+
+    def forward(self, data, edges_pos, edges_neg):
+        z = self.encoder(data, edges_pos)
+        # Get scores for edges using inner product
+        pos_score = (z[edges_pos[0]] * z[edges_pos[1]]).sum(dim=1)
+        neg_score = (z[edges_neg[0]] * z[edges_neg[1]]).sum(dim=1)
+        preds = torch.cat((pos_score, neg_score))
+
+        targets = torch.cat((torch.ones_like(pos_score),
+                             torch.zeros_like(neg_score)))
+        cost = self.loss_fn(preds, targets)
+
+        return cost
+
+class NodeClassifier(nn.Module):
+    def __init__(self, encoder, hidden_dim, num_classes):
+        super(NodeClassifier, self).__init__()
+        self.encoder = encoder
+        self.linear = nn.Linear(hidden_dim, num_classes)
+
+    def reset_parameters(self):
+        self.linear.reset_parameters()
+
+    def forward(self, data):
+        x = self.encoder(data, data.edge_index, corrupt=False)
+        x = x.detach()
+        x = self.linear(x)
+        return torch.log_softmax(x, dim=-1)
+
 class VGEncoder(nn.Module):
     def __init__(self, input_feat_dim, hidden_dim1, hidden_dim2):
         super(VGEncoder, self).__init__()
@@ -81,19 +125,10 @@ class VGEncoder(nn.Module):
         else:
             return z
 
-class InnerProductDecoder(nn.Module):
-    """Decoder for using inner product for prediction."""
-    def __init__(self):
-        super(InnerProductDecoder, self).__init__()
-
-    def forward(self, z):
-        adj = torch.mm(z, z.t())
-        return adj
-
 class BilinearDecoder(nn.Module):
     """Decoder for using inner product for prediction."""
     def __init__(self, input_dim):
-        super(InnerProductDecoder, self).__init__()
+        super(BilinearDecoder, self).__init__()
         self.weight = nn.Parameter(torch.Tensor(input_dim, input_dim))
         stdv = 1. / math.sqrt(self.weight.size(1))
         self.weight.data.uniform_(-stdv, stdv)
@@ -123,67 +158,6 @@ class VGAE(nn.Module):
 
         return cost + KLD, mu
 
-class GraphEncoder(nn.Module):
-    def __init__(self, input_feat_dim, hidden_dims):
-        super(GraphEncoder, self).__init__()
-
-        self.layers = nn.ModuleList([GCNConv(input_feat_dim, hidden_dims[0],
-                                             bias=False),
-                                     nn.PReLU(hidden_dims[0])])
-
-        for i in range(1, len(hidden_dims)):
-            self.layers.append(GCNConv(hidden_dims[i - 1], hidden_dims[i],
-                                       bias=False))
-            self.layers.append(nn.PReLU(hidden_dims[i]))
-
-    def forward(self, data, edge_index, corrupt=False):
-        if corrupt:
-            perm = torch.randperm(data.num_nodes)
-            x = data.x[perm]
-        else:
-            x = data.x
-
-        z = self.layers[1](self.layers[0](x, edge_index))
-
-        for i in range(2, len(self.layers), 2):
-            z = self.layers[i + 1](self.layers[i](z, edge_index))
-
-        return z
-
-class GAE(nn.Module):
-    def __init__(self, input_feat_dim, hidden_dims):
-        super(GAE, self).__init__()
-        self.encoder = GraphEncoder(input_feat_dim, hidden_dims)
-        self.decoder = InnerProductDecoder()
-        self.loss_fn = nn.BCEWithLogitsLoss()
-
-    def forward(self, data, edges_pos, edges_neg):
-        z = self.encoder(data, edges_pos)
-        # Get scores for edges using inner product
-        pos_score = (z[edges_pos[0]] * z[edges_pos[1]]).sum(dim=1)
-        neg_score = (z[edges_neg[0]] * z[edges_neg[1]]).sum(dim=1)
-        preds = torch.cat((pos_score, neg_score))
-
-        targets = torch.cat((torch.ones_like(pos_score),
-                             torch.zeros_like(neg_score)))
-        cost = self.loss_fn(preds, targets)
-
-        return cost
-
-class NodeClassifier(nn.Module):
-    def __init__(self, encoder, hidden_dim, num_classes):
-        super(NodeClassifier, self).__init__()
-        self.encoder = encoder
-        self.lin = nn.Linear(hidden_dim, num_classes)
-
-    def reset_parameters(self):
-        self.lin.reset_parameters()
-
-    def forward(self, data):
-        x = self.encoder(data, data.edge_index, corrupt=False)
-        x = x.detach()
-        x = self.lin(x)
-        return torch.log_softmax(x, dim=-1)
 
 class LinkPredictor(nn.Module):
     def __init__(self):

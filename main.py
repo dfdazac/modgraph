@@ -140,6 +140,7 @@ def train_encoder(args):
     print('Train logistic regression classifier.')
     best_accs = []
     best_val_acc = 0
+    patience_count = 0
     for epoch in range(1, 101):
         train_classifier()
         accs = test_classifier()
@@ -150,6 +151,13 @@ def train_encoder(args):
         if val_acc > best_val_acc:
             best_val_acc = val_acc
             best_accs = accs
+            patience_count = 0
+        else:
+            # Terminate early based on patience
+            patience_count += 1
+            if patience_count == args.patience:
+                print('Terminating early')
+                break
 
     log = 'Best validation results\nTrain: {:.4f}, Val: {:.4f}, Test: {:.4f}'
     print(log.format(*best_accs))
