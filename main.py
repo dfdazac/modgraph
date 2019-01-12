@@ -41,8 +41,6 @@ def eval_link_prediction(emb, edges_pos, edges_neg):
 
 def train_encoder(args):
     now = datetime.now().strftime('%Y-%m-%d-%H%M%S')
-    torch.random.manual_seed(42)
-    np.random.seed(42)
 
     if not torch.cuda.is_available() and args.device.startswith('cuda'):
         raise ValueError(f'Device {args.device} specified '
@@ -90,11 +88,12 @@ def train_encoder(args):
         # Evaluate on val edges
         embeddings = model.encoder(data, train_pos).cpu().detach()
         auc, ap = eval_link_prediction(embeddings, val_pos, val_neg)
-        print('[{:03d}/{:03d}] train loss: {:.6f}, '
+        print('\r[{:03d}/{:03d}] train loss: {:.6f}, '
               'val_auc: {:6f}, val_ap: {:6f}'.format(epoch,
                                                       args.epochs,
                                                       loss.item(),
-                                                      auc, ap))
+                                                      auc, ap),
+              end='', flush=True)
 
         if auc > best_auc:
             # Keep best model on val set
@@ -105,7 +104,6 @@ def train_encoder(args):
             # Terminate early based on patience
             patience_count += 1
             if patience_count == args.patience:
-                print('Terminating early')
                 break
 
     # Evaluate on test edges
@@ -113,7 +111,7 @@ def train_encoder(args):
     model.eval()
     embeddings = model.encoder(data, train_pos).cpu().detach()
     auc, ap = eval_link_prediction(embeddings, test_pos, test_neg)
-    print('test_auc: {:6f}, test_ap: {:6f}'.format(auc, ap))
+    print('\ntest_auc: {:6f}, test_ap: {:6f}'.format(auc, ap))
 
     # Evaluate embeddings in node classification
     classifier = NodeClassifier(model.encoder,
@@ -128,7 +126,6 @@ def train_encoder(args):
                              data('train_mask', 'val_mask', 'test_mask')))
         mask_idx = np.random.choice(range(data.num_nodes), num_labels_all,
                                     replace=False)
-
         masks = []
         start = 0
         for _, mask in data('train_mask', 'val_mask', 'test_mask'):
@@ -161,15 +158,16 @@ def train_encoder(args):
             accs.append(acc)
         return accs
 
-    print('Train logistic regression classifier.')
+    print('Training node classifier')
     best_accs = []
     best_val_acc = 0
     patience_count = 0
-    for epoch in range(1, 101):
+    epochs = 100
+    for epoch in range(1, epochs + 1):
         train_classifier()
         accs = test_classifier()
-        log = 'Epoch: {:02d}, Train: {:.4f}, Val: {:.4f}, Test: {:.4f}'
-        print(log.format(epoch, *accs))
+        log = '\r[{:03d}/{:03d}] train: {:.4f}, val: {:.4f}, test: {:.4f}'
+        print(log.format(epoch, epochs, *accs), end='', flush=True)
 
         val_acc = accs[1]
         if val_acc > best_val_acc:
@@ -180,18 +178,38 @@ def train_encoder(args):
             # Terminate early based on patience
             patience_count += 1
             if patience_count == args.patience:
-                print('Terminating early')
                 break
 
-    log = 'Best validation results\nTrain: {:.4f}, Val: {:.4f}, Test: {:.4f}'
+    log = '\nBest validation results\nTrain: {:.4f}, Val: {:.4f}, Test: {:.4f}'
     print(log.format(*best_accs))
     test_acc = best_accs[2]
 
     return auc, ap, test_acc
 
 
+def run_experiments(args, n_exper):
+    torch.random.manual_seed(42)
+    np.random.seed(42)
+    results = np.empty([n_exper, 3])
+
+    for i in range(n_exper):
+        print('\nExperiment {:d}/{:d}'.format(i + 1, n_exper))
+        results[i] = train_encoder(args)
+
+    mean = np.mean(results, axis=0)
+    std = np.std(results, axis=0)
+
+    print('-'*50)
+    print('Final results')
+    metrics = ['AUC', 'AP', 'ACC']
+    for i in range(3):
+        print('{}: {:.1f} ± {:.2f}'.format(metrics[i],
+                                           mean[i] * 100,
+                                           std[i] * 100))
+
+
 args = Namespace()
-args.model_name = 'gae'
+args.model_name = 'dgi'
 args.dataset = 'cora'
 args.hidden_dims = [32, 16]
 args.lr = 0.001
@@ -200,4 +218,4 @@ args.device = 'cpu'
 args.patience = 20
 args.random_splits = False
 
-train_encoder(args)
+run_experiments(args, 3)
