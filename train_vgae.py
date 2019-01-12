@@ -12,18 +12,6 @@ from sklearn.metrics import roc_auc_score, average_precision_score
 from models import VGAE, GAE
 from utils import mask_test_edges, adj_from_edge_index
 
-parser = argparse.ArgumentParser()
-parser.add_argument('--model', type=str, default='vgae', help="models used")
-parser.add_argument('--seed', type=int, default=42, help='Random seed.')
-parser.add_argument('--epochs', type=int, default=200, help='Number of epochs to train.')
-parser.add_argument('--hidden1', type=int, default=32, help='Number of units in hidden layer 1.')
-parser.add_argument('--hidden2', type=int, default=16, help='Number of units in hidden layer 2.')
-parser.add_argument('--lr', type=float, default=0.01, help='Initial learning rate.')
-parser.add_argument('--dropout', type=float, default=0., help='Dropout rate (1 - keep probability).')
-parser.add_argument('--dataset-str', type=str, default='cora', help='type of dataset.')
-
-args = parser.parse_args()
-
 def get_roc_score(emb, adj_orig, edges_pos, edges_neg):
     def sigmoid(x):
         return 1 / (1 + np.exp(-x))
@@ -117,8 +105,6 @@ def train(args):
               "time=", "{:.5f}".format(time.time() - t)
               )
 
-    print("Optimization Finished!")
-
     roc_score, ap_score = get_roc_score(hidden_emb, adj_orig, test_edges,
                                         test_edges_false)
     print('Test ROC score: ' + str(roc_score))
@@ -127,4 +113,23 @@ def train(args):
     torch.save(model.state_dict(), osp.join('saved', f'{args.model}-{dataset}.p'))
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--model', type=str, default='vgae',
+                        help="models used")
+    parser.add_argument('--seed', type=int, default=42, help='Random seed.')
+    parser.add_argument('--epochs', type=int, default=200,
+                        help='Number of epochs to train.')
+    parser.add_argument('--hidden1', type=int, default=32,
+                        help='Number of units in hidden layer 1.')
+    parser.add_argument('--hidden2', type=int, default=16,
+                        help='Number of units in hidden layer 2.')
+    parser.add_argument('--lr', type=float, default=0.01,
+                        help='Initial learning rate.')
+    parser.add_argument('--dropout', type=float, default=0.,
+                        help='Dropout rate (1 - keep probability).')
+    parser.add_argument('--dataset-str', type=str, default='cora',
+                        help='type of dataset.')
+
+    args = parser.parse_args()
+
     train(args)
