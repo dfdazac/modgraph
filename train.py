@@ -194,7 +194,7 @@ def run_experiments(model_name, device, dataset, hidden_dims, lr, epochs,
     results = np.empty([n_exper, 3])
 
     for i in range(n_exper):
-        print('\nExperiment {:d}/{:d}'.format(i + 1, n_exper))
+        print('\nTrial {:d}/{:d}'.format(i + 1, n_exper))
         results[i] = train_encoder(model_name, device, dataset, hidden_dims,
                                    lr, epochs, random_splits)
 

@@ -23,5 +23,6 @@ param_grid = {'model_name': ('gae', 'dgi'),
 grid = ParameterGrid(param_grid)
 
 for i, hparams in enumerate(grid):
+    print('Experiment configuration {:d}/{:d}'.format(i + 1, len(grid)))
     config.update(hparams)
     ex.run(config_updates=config)
