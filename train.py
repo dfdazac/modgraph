@@ -150,7 +150,6 @@ def train_encoder(model_name, device, dataset, hidden_dims, lr, epochs,
     print('Training node classifier')
     best_accs = []
     best_val_acc = 0
-    epochs = 100
     for epoch in range(1, epochs + 1):
         train_classifier()
         accs = test_classifier()

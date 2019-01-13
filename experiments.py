@@ -15,8 +15,9 @@ config = {'model_name': None,
 
 # Values to be changed in experiments
 param_grid = {'model_name': ('gae', 'dgi'),
-              'dataset': ('cora', 'citeseer', 'pubmed'),
-              'hidden_dims': ([32], [64], [128], [512]),
+              'dataset': ('cora', 'citeseer', 'pubmed', 'coauthorcs',
+                          'coautorphys', 'amazoncomp', 'amazonphoto'),
+              'hidden_dims': ([64, 32], [256, 128]),
               'lr': (0.01, 0.005, 0.001)}
 
 grid = ParameterGrid(param_grid)
