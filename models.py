@@ -90,12 +90,13 @@ class NodeClassifier(nn.Module):
         super(NodeClassifier, self).__init__()
         self.encoder = encoder
         self.linear = nn.Linear(hidden_dim, num_classes)
+        self.dropout = nn.Dropout(0.4)
 
     def reset_parameters(self):
         self.linear.reset_parameters()
 
     def forward(self, data):
-        x = self.encoder(data, data.edge_index, corrupt=False)
+        x = self.dropout(self.encoder(data, data.edge_index, corrupt=False))
         x = x.detach()
         x = self.linear(x)
         return torch.log_softmax(x, dim=-1)
