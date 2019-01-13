@@ -88,12 +88,13 @@ def train_encoder(model_name, device, dataset, hidden_dims, lr, epochs,
         # Evaluate on val edges
         embeddings = model.encoder(data, train_pos).cpu().detach()
         auc, ap = eval_link_prediction(embeddings, val_pos, val_neg)
-        print('\r[{:03d}/{:03d}] train loss: {:.6f}, '
-              'val_auc: {:6f}, val_ap: {:6f}'.format(epoch,
-                                                      epochs,
-                                                      loss.item(),
-                                                      auc, ap),
-              end='', flush=True)
+        if epoch % 50 == 0:
+            print('\r[{:03d}/{:03d}] train loss: {:.6f}, '
+                  'val_auc: {:6f}, val_ap: {:6f}'.format(epoch,
+                                                          epochs,
+                                                          loss.item(),
+                                                          auc, ap),
+                  end='', flush=True)
 
         if auc > best_auc:
             # Keep best model on val set
@@ -161,8 +162,9 @@ def train_encoder(model_name, device, dataset, hidden_dims, lr, epochs,
     for epoch in range(1, epochs + 1):
         train_classifier()
         accs = test_classifier()
-        log = '\r[{:03d}/{:03d}] train: {:.4f}, val: {:.4f}, test: {:.4f}'
-        print(log.format(epoch, epochs, *accs), end='', flush=True)
+        if epoch % 50 == 0:
+            log = '\r[{:03d}/{:03d}] train: {:.4f}, val: {:.4f}, test: {:.4f}'
+            print(log.format(epoch, epochs, *accs), end='', flush=True)
 
         val_acc = accs[1]
         if val_acc > best_val_acc:
