@@ -55,7 +55,7 @@ def train_encoder(model_name, device, dataset, hidden_dims, lr, epochs,
     dataset = Planetoid(path, dataset)
     data = dataset[0]
     data.x = data.x.to(device)
-    # Obtain edges for the link prediction task
+
     positive_splits, negative_splits = split_edges(data.edge_index)
     train_pos, val_pos, test_pos = positive_splits
     train_neg, val_neg, test_neg = negative_splits
@@ -74,9 +74,7 @@ def train_encoder(model_name, device, dataset, hidden_dims, lr, epochs,
     model = model_class(dataset.num_features, hidden_dims).to(device)
 
     # Train model
-    logdir = osp.join('runs', f'{now}')
-    ckpt_path = osp.join(logdir, 'checkpoint.p')
-    writer = SummaryWriter(logdir)
+    ckpt_name = '.ckpt'
     print(f'Training {model_name}')
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     best_auc = 0
@@ -100,10 +98,10 @@ def train_encoder(model_name, device, dataset, hidden_dims, lr, epochs,
         if auc > best_auc:
             # Keep best model on val set
             best_auc = auc
-            torch.save(model.state_dict(), ckpt_path)
+            torch.save(model.state_dict(), ckpt_name)
 
     # Evaluate on test edges
-    model.load_state_dict(torch.load(osp.join(ckpt_path)))
+    model.load_state_dict(torch.load(osp.join(ckpt_name)))
     model.eval()
     embeddings = model.encoder(data, train_pos).cpu().detach()
     auc, ap = eval_link_prediction(embeddings, test_pos, test_neg)
