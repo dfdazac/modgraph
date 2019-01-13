@@ -5,12 +5,13 @@ import torch
 import torch.nn.functional as F
 import numpy as np
 from torch_geometric.datasets import Planetoid
+from gnnbench import GNNBenchmark
 from sklearn.metrics import roc_auc_score, average_precision_score
 from tensorboardX import SummaryWriter
 from sacred import Experiment
 from sacred.observers import MongoObserver
 
-from utils import split_edges, add_reverse_edges
+from utils import split_edges, add_reverse_edges, shuffle_graph_labels
 from models import GAE, DGI, NodeClassifier
 
 
@@ -52,8 +53,13 @@ def train_encoder(model_name, device, dataset, hidden_dims, lr, epochs,
 
     # Load data
     path = osp.join(osp.dirname(osp.realpath(__file__)), 'data', dataset)
-    dataset = Planetoid(path, dataset)
+    if dataset in ('cora', 'citeseer', 'pubmed'):
+        dataset = Planetoid(path, dataset)
+    elif dataset in ('coautorcs', 'coautorphys', 'amazoncomp', 'amazonphoto'):
+        dataset = GNNBenchmark(path, dataset)
+
     data = dataset[0]
+    # During unsupervised learning we only need features on device
     data.x = data.x.to(device)
 
     positive_splits, negative_splits = split_edges(data.edge_index)
@@ -110,7 +116,6 @@ def train_encoder(model_name, device, dataset, hidden_dims, lr, epochs,
 
     # Evaluate embeddings in node classification
     del train_pos, train_neg
-    data = data.to(device)
     classifier = NodeClassifier(model.encoder,
                                 hidden_dims[-1],
                                 dataset.num_classes).to(device)
@@ -118,23 +123,10 @@ def train_encoder(model_name, device, dataset, hidden_dims, lr, epochs,
     classifier_optimizer = torch.optim.Adam(classifier.parameters(), lr=0.001)
 
     if random_splits:
-        # Generate new random masks
-        num_labels_all = sum(map(lambda x: x[1].sum().item(),
-                             data('train_mask', 'val_mask', 'test_mask')))
-        mask_idx = np.random.choice(range(data.num_nodes), num_labels_all,
-                                    replace=False)
-        masks = []
-        start = 0
-        for _, mask in data('train_mask', 'val_mask', 'test_mask'):
-            new_mask = torch.zeros_like(mask)
-            num_labels = torch.sum(mask).item()
-            new_mask[mask_idx[start:start + num_labels]] = 1
-            masks.append(new_mask)
-            start += num_labels
+        data = shuffle_graph_labels(data)
 
-        # Reassign label masks
-        for i, (name, _) in enumerate(data('train_mask', 'val_mask', 'test_mask')):
-            setattr(data, name, masks[i])
+    # For supervised learning we need features and labels on device
+    data = data.to(device)
 
     def train_classifier():
         classifier.train()
@@ -187,7 +179,7 @@ ex.observers.append(MongoObserver.create(url='mongodb://daniel:daniel1@ds151814.
 def config():
     model_name = 'gae'
     device = 'cpu'
-    dataset = 'cora'
+    dataset = 'coautorcs'
     hidden_dims = [32, 16]
     lr = 0.001
     epochs = 200
