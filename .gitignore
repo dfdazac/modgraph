@@ -126,3 +126,6 @@ data/*
 # Run logs
 runs/*
 !runs/.gitkeep
+
+# Temporary checkpoints
+.ckpt

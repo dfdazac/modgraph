@@ -55,7 +55,7 @@ def train_encoder(model_name, device, dataset, hidden_dims, lr, epochs,
     path = osp.join(osp.dirname(osp.realpath(__file__)), 'data', dataset)
     if dataset in ('cora', 'citeseer', 'pubmed'):
         dataset = Planetoid(path, dataset)
-    elif dataset in ('coautorcs', 'coautorphys', 'amazoncomp', 'amazonphoto'):
+    elif dataset in ('coauthorcs', 'coauthorphys', 'amazoncomp', 'amazonphoto'):
         dataset = GNNBenchmark(path, dataset)
 
     data = dataset[0]
@@ -179,7 +179,7 @@ ex.observers.append(MongoObserver.create(url='mongodb://daniel:daniel1@ds151814.
 def config():
     model_name = 'gae'
     device = 'cpu'
-    dataset = 'coautorcs'
+    dataset = 'coauthorcs'
     hidden_dims = [32, 16]
     lr = 0.001
     epochs = 200
