@@ -17,7 +17,8 @@ class GNNBenchmark(InMemoryDataset):
     def __init__(self, root, name, train_examples_per_class,
                  val_examples_per_class, transform=None, pre_transform=None):
         self.name = name
-        name2files = {'coauthorcs': 'ms_academic_cs.npz',
+        name2files = {'corafull': 'cora_full.npz',
+                      'coauthorcs': 'ms_academic_cs.npz',
                       'coauthorphys': 'ms_academic_phy.npz',
                       'amazoncomp': 'amazon_electronics_computers.npz',
                       'amazonphoto': 'amazon_electronics_photo.npz'}

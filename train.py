@@ -53,10 +53,14 @@ def train_encoder(model_name, device, dataset, hidden_dims, lr, epochs,
 
     # Load data
     path = osp.join(osp.dirname(osp.realpath(__file__)), 'data', dataset)
+    train_examples_per_class = 20
+    val_examples_per_class = 30
     if dataset in ('cora', 'citeseer', 'pubmed'):
         dataset = Planetoid(path, dataset)
-    elif dataset in ('coauthorcs', 'coauthorphys', 'amazoncomp', 'amazonphoto'):
-        dataset = GNNBenchmark(path, dataset)
+    elif dataset in ('corafull', 'coauthorcs', 'coauthorphys', 'amazoncomp',
+                     'amazonphoto'):
+        dataset = GNNBenchmark(path, dataset, train_examples_per_class,
+                               val_examples_per_class)
 
     data = dataset[0]
     # During unsupervised learning we only need features on device
@@ -123,7 +127,8 @@ def train_encoder(model_name, device, dataset, hidden_dims, lr, epochs,
     classifier_optimizer = torch.optim.Adam(classifier.parameters(), lr=0.001)
 
     if random_splits:
-        data = shuffle_graph_labels(data)
+        data = shuffle_graph_labels(data, train_examples_per_class,
+                                    val_examples_per_class)
 
     # For supervised learning we need features and labels on device
     data = data.to(device)
