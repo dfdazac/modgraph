@@ -16,20 +16,23 @@ class GNNBenchmark(InMemoryDataset):
 
     def __init__(self, root, name, train_examples_per_class,
                  val_examples_per_class, transform=None, pre_transform=None):
-        self.name = name
         name2files = {'corafull': 'cora_full.npz',
                       'coauthorcs': 'ms_academic_cs.npz',
                       'coauthorphys': 'ms_academic_phy.npz',
                       'amazoncomp': 'amazon_electronics_computers.npz',
                       'amazonphoto': 'amazon_electronics_photo.npz'}
+
+        self.name = name
+        self.n_train = train_examples_per_class
+        self.n_val = val_examples_per_class
+
         if name in name2files:
             self.raw_file_name = name2files[name]
         else:
             raise ValueError(f'Unknown dataset {name}')
+
         super(GNNBenchmark, self).__init__(root, transform, pre_transform)
         self.data, self.slices = torch.load(self.processed_paths[0])
-        self.n_train = train_examples_per_class
-        self.n_val = val_examples_per_class
 
     @property
     def raw_file_names(self):
@@ -74,7 +77,8 @@ def read_gnnbenchmark_data(raw_dir, filename, underrepresented_classes,
                 edge_index=edge_index,
                 y=torch.tensor(graph.labels, dtype=torch.int64))
 
-    data = shuffle_graph_labels(data)
+    data = shuffle_graph_labels(data, train_examples_per_class,
+                                val_examples_per_class)
 
     return data
 

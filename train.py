@@ -183,7 +183,7 @@ ex.observers.append(MongoObserver.create(url='mongodb://daniel:daniel1@ds151814.
 def config():
     model_name = 'gae'
     device = 'cpu'
-    dataset = 'coauthorcs'
+    dataset = 'corafull'
     hidden_dims = [32, 16]
     lr = 0.001
     epochs = 200

@@ -15,8 +15,7 @@ config = {'model_name': None,
 
 # Values to be changed in experiments
 param_grid = {'model_name': ('gae', 'dgi'),
-              'dataset': ('cora', 'citeseer', 'pubmed', 'coauthorcs',
-                          'coautorphys', 'amazoncomp', 'amazonphoto'),
+              'dataset': ('corafull'),
               'hidden_dims': ([256, 128],),
               'lr': (0.01, 0.005, 0.001)}
 
