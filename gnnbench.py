@@ -7,14 +7,15 @@ from torch_geometric.data import InMemoryDataset, download_url
 from torch_geometric.data import Data
 
 from preprocess import eliminate_self_loops as eliminate_self_loops_adj,\
-    largest_connected_components
+    largest_connected_components, remove_underrepresented_classes
 from utils import shuffle_graph_labels
 
 
 class GNNBenchmark(InMemoryDataset):
     url = 'https://github.com/shchur/gnn-benchmark/raw/master/data/npz'
 
-    def __init__(self, root, name, transform=None, pre_transform=None):
+    def __init__(self, root, name, train_examples_per_class,
+                 val_examples_per_class, transform=None, pre_transform=None):
         self.name = name
         name2files = {'coauthorcs': 'ms_academic_cs.npz',
                       'coauthorphys': 'ms_academic_phy.npz',
@@ -26,6 +27,8 @@ class GNNBenchmark(InMemoryDataset):
             raise ValueError(f'Unknown dataset {name}')
         super(GNNBenchmark, self).__init__(root, transform, pre_transform)
         self.data, self.slices = torch.load(self.processed_paths[0])
+        self.n_train = train_examples_per_class
+        self.n_val = val_examples_per_class
 
     @property
     def raw_file_names(self):
@@ -40,7 +43,11 @@ class GNNBenchmark(InMemoryDataset):
             download_url('{}/{}'.format(self.url, name), self.raw_dir)
 
     def process(self):
-        data = read_gnnbenchmark_data(self.raw_dir, self.raw_file_name)
+        underrepresented_classes = self.name == 'corafull'
+        data = read_gnnbenchmark_data(self.raw_dir, self.raw_file_name,
+                                      underrepresented_classes,
+                                      self.n_train, self.n_val)
+
         data = data if self.pre_transform is None else self.pre_transform(data)
         data, slices = self.collate([data])
         torch.save((data, slices), self.processed_paths[0])
@@ -49,9 +56,17 @@ class GNNBenchmark(InMemoryDataset):
         return '{}()'.format(self.name)
 
 
-def read_gnnbenchmark_data(raw_dir, filename):
+def read_gnnbenchmark_data(raw_dir, filename, underrepresented_classes,
+                           train_examples_per_class,
+                           val_examples_per_class):
     graph = load_dataset(os.path.join(raw_dir, filename))
     graph = graph.standardize()
+
+    if underrepresented_classes:
+        graph = remove_underrepresented_classes(graph,
+                                                train_examples_per_class,
+                                                val_examples_per_class)
+        graph = graph.standardize()
 
     edge_index = torch.tensor(graph.adj_matrix.nonzero(), dtype=torch.int64)
     data = Data(x=torch.tensor(graph.attr_matrix.toarray()),

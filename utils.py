@@ -91,7 +91,8 @@ def adj_from_edge_index(edge_index):
     boolean_adj = partial_adj + partial_adj.T
     return boolean_adj.astype(np.int64).tocsr()
 
-def shuffle_graph_labels(data):
+def shuffle_graph_labels(data, train_examples_per_class,
+                         val_examples_per_class):
     data.train_mask = torch.zeros(data.num_nodes, dtype=torch.uint8)
     data.val_mask = torch.zeros_like(data.train_mask)
     data.test_mask = torch.zeros_like(data.train_mask)
@@ -99,8 +100,8 @@ def shuffle_graph_labels(data):
     # Sample 20 nodes per label for training, 30 per label for validation,
     # and the rest for testing
     labels = np.unique(data.y.cpu().numpy())
-    n_train = 20
-    n_val = 30
+    n_train = train_examples_per_class
+    n_val = val_examples_per_class
     for i in labels:
         idx = np.random.permutation(np.where(data.y == i)[0])
         data.train_mask[idx[:n_train]] = 1
