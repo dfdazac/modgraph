@@ -48,7 +48,6 @@ dependencies:
     - networkx==2.2
     - plyfile==0.7
     - protobuf==3.6.1
-    - tensorboardx==1.6
     - torch==1.0.0
     - torch-cluster==1.2.2
     - torch-geometric==1.0.0

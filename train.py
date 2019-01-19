@@ -7,7 +7,6 @@ import numpy as np
 from torch_geometric.datasets import Planetoid
 from gnnbench import GNNBenchmark
 from sklearn.metrics import roc_auc_score, average_precision_score
-from tensorboardX import SummaryWriter
 from sacred import Experiment
 from sacred.observers import MongoObserver
 
