@@ -11,7 +11,7 @@ from sacred import Experiment
 from sacred.observers import MongoObserver
 
 from utils import split_edges, add_reverse_edges, shuffle_graph_labels
-from models import GAE, DGI, NodeClassifier
+from models import GAE, DGI, Node2Vec, NodeClassifier
 
 
 def eval_link_prediction(emb, edges_pos, edges_neg):
@@ -40,7 +40,7 @@ def eval_link_prediction(emb, edges_pos, edges_neg):
     return auc_score, ap_score
 
 
-def train_encoder(model_name, device, dataset, hidden_dims, lr, epochs,
+def train_encoder(model_name, device, dataset_str, hidden_dims, lr, epochs,
                   random_splits):
     now = datetime.now().strftime('%Y-%m-%d-%H%M%S')
 
@@ -51,14 +51,14 @@ def train_encoder(model_name, device, dataset, hidden_dims, lr, epochs,
     device = torch.device(device)
 
     # Load data
-    path = osp.join(osp.dirname(osp.realpath(__file__)), 'data', dataset)
+    path = osp.join(osp.dirname(osp.realpath(__file__)), 'data', dataset_str)
     train_examples_per_class = 20
     val_examples_per_class = 30
-    if dataset in ('cora', 'citeseer', 'pubmed'):
-        dataset = Planetoid(path, dataset)
-    elif dataset in ('corafull', 'coauthorcs', 'coauthorphys', 'amazoncomp',
+    if dataset_str in ('cora', 'citeseer', 'pubmed'):
+        dataset = Planetoid(path, dataset_str)
+    elif dataset_str in ('corafull', 'coauthorcs', 'coauthorphys', 'amazoncomp',
                      'amazonphoto'):
-        dataset = GNNBenchmark(path, dataset, train_examples_per_class,
+        dataset = GNNBenchmark(path, dataset_str, train_examples_per_class,
                                val_examples_per_class)
 
     data = dataset[0]
@@ -77,6 +77,10 @@ def train_encoder(model_name, device, dataset, hidden_dims, lr, epochs,
         model_class = DGI
     elif model_name == 'gae':
         model_class = GAE
+    elif model_name == 'node2vec':
+        path = osp.join(osp.dirname(osp.realpath(__file__)), 'node2vec',
+                        dataset_str)
+        model = Node2Vec(data.edge_index, path, data.num_nodes)
     else:
         raise ValueError(f'Unknown model {model_name}')
 
@@ -180,9 +184,9 @@ ex.observers.append(MongoObserver.create(url='mongodb://daniel:daniel1@ds151814.
 
 @ex.config
 def config():
-    model_name = 'gae'
+    model_name = 'node2vec'
     device = 'cpu'
-    dataset = 'corafull'
+    dataset = 'cora'
     hidden_dims = [32, 16]
     lr = 0.001
     epochs = 200

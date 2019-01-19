@@ -1,7 +1,11 @@
+import os.path as osp
+import subprocess
+
 import torch
 import torch.nn as nn
 from torch_geometric.nn import GCNConv
 from torch_geometric.nn.inits import glorot
+import numpy as np
 
 class GraphEncoder(nn.Module):
     def __init__(self, input_feat_dim, hidden_dims):
@@ -83,10 +87,47 @@ class GAE(nn.Module):
 
         return cost
 
+
+class Node2VecEncoder:
+    def __init__(self, embeddings):
+        self.embeddings = embeddings
+
+    def __call__(self, data, edge_index):
+        return self.embeddings
+
+
+class Node2Vec:
+    node2vec_path = '../snap/examples/node2vec/node2vec'
+
+    def __init__(self, edge_index, path, num_nodes, dim=128):
+        # Write edge list
+        edges_path = path + '.edges'
+        embs_path = path + '.emb'
+        #np.savetxt(edges_path, edge_index.cpu().numpy().T, fmt='%d %d')
+
+        # Call node2vec
+        #subprocess.run([self.node2vec_path,
+        #                f'-i:{edges_path}',
+        #                f'-o:{embs_path}',
+        #                f'-d:{dim:d}', '-v'])
+
+        # Read embeddings and store in encoder
+        emb_data = np.loadtxt(embs_path, skiprows=1)
+        embeddings = np.zeros([num_nodes, emb_data.shape[1] - 1])
+        idx = emb_data[:, 0].astype(np.int)
+        embeddings[idx] = emb_data[:, 1:]
+        all_embs = nn.Embedding(num_nodes, dim,
+                                _weight=torch.from_numpy(embeddings))
+        self.encoder = Node2VecEncoder(all_embs)
+
+
 class NodeClassifier(nn.Module):
     def __init__(self, encoder, hidden_dim, num_classes):
         super(NodeClassifier, self).__init__()
         self.encoder = encoder
+        for param in self.encoder.parameters():
+            param.requires_grad = False
+
         self.linear = nn.Linear(hidden_dim, num_classes)
         self.dropout = nn.Dropout(0.4)
 
