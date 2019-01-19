@@ -62,15 +62,10 @@ def train_encoder(model_name, device, dataset_str, hidden_dims, lr, epochs,
                                val_examples_per_class)
 
     data = dataset[0]
-    # During unsupervised learning we only need features on device
-    data.x = data.x.to(device)
 
     positive_splits, negative_splits = split_edges(data.edge_index)
     train_pos, val_pos, test_pos = positive_splits
     train_neg, val_neg, test_neg = negative_splits
-    # Add edges in reverse direction for encoding
-    train_pos = add_reverse_edges(train_pos).to(device)
-    train_neg = add_reverse_edges(train_neg).to(device)
 
     # Create model
     if model_name == 'dgi':
@@ -78,44 +73,54 @@ def train_encoder(model_name, device, dataset_str, hidden_dims, lr, epochs,
     elif model_name == 'gae':
         model_class = GAE
     elif model_name == 'node2vec':
-        path = osp.join(osp.dirname(osp.realpath(__file__)), 'node2vec',
-                        dataset_str)
-        model = Node2Vec(data.edge_index, path, data.num_nodes)
+        pass
     else:
         raise ValueError(f'Unknown model {model_name}')
 
-    model = model_class(dataset.num_features, hidden_dims).to(device)
+    if model_name != 'node2vec':
+        # During unsupervised learning we only need features on device
+        data.x = data.x.to(device)
+        # Add edges in reverse direction for encoding
+        train_pos = add_reverse_edges(train_pos).to(device)
+        train_neg = add_reverse_edges(train_neg).to(device)
 
-    # Train model
-    ckpt_name = '.ckpt'
-    print(f'Training {model_name}')
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-    best_auc = 0
-    for epoch in range(1, epochs + 1):
-        model.train()
-        optimizer.zero_grad()
-        loss = model(data, train_pos, train_neg)
-        loss.backward()
-        optimizer.step()
+        model = model_class(dataset.num_features, hidden_dims).to(device)
 
-        # Evaluate on val edges
-        embeddings = model.encoder(data, train_pos).cpu().detach()
-        auc, ap = eval_link_prediction(embeddings, val_pos, val_neg)
-        if epoch % 50 == 0:
-            print('\r[{:03d}/{:03d}] train loss: {:.6f}, '
-                  'val_auc: {:6f}, val_ap: {:6f}'.format(epoch,
-                                                          epochs,
-                                                          loss.item(),
-                                                          auc, ap),
-                  end='', flush=True)
+        # Train model
+        ckpt_name = '.ckpt'
+        print(f'Training {model_name}')
+        optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+        best_auc = 0
+        for epoch in range(1, epochs + 1):
+            model.train()
+            optimizer.zero_grad()
+            loss = model(data, train_pos, train_neg)
+            loss.backward()
+            optimizer.step()
 
-        if auc > best_auc:
-            # Keep best model on val set
-            best_auc = auc
-            torch.save(model.state_dict(), ckpt_name)
+            # Evaluate on val edges
+            embeddings = model.encoder(data, train_pos).cpu().detach()
+            auc, ap = eval_link_prediction(embeddings, val_pos, val_neg)
+            if epoch % 50 == 0:
+                print('\r[{:03d}/{:03d}] train loss: {:.6f}, '
+                      'val_auc: {:6f}, val_ap: {:6f}'.format(epoch,
+                                                              epochs,
+                                                              loss.item(),
+                                                              auc, ap),
+                      end='', flush=True)
 
-    # Evaluate on test edges
-    model.load_state_dict(torch.load(osp.join(ckpt_name)))
+            if auc > best_auc:
+                # Keep best model on val set
+                best_auc = auc
+                torch.save(model.state_dict(), ckpt_name)
+
+        # Evaluate on test edges
+        model.load_state_dict(torch.load(osp.join(ckpt_name)))
+    else:
+        path = osp.join(osp.dirname(osp.realpath(__file__)), 'node2vec',
+                        dataset_str)
+        model = Node2Vec(train_pos, path, data.num_nodes)
+
     model.eval()
     embeddings = model.encoder(data, train_pos).cpu().detach()
     auc, ap = eval_link_prediction(embeddings, test_pos, test_neg)
@@ -187,9 +192,9 @@ def config():
     model_name = 'node2vec'
     device = 'cpu'
     dataset = 'cora'
-    hidden_dims = [32, 16]
+    hidden_dims = [128]
     lr = 0.001
-    epochs = 200
+    epochs = 1
     random_splits = True
 
 

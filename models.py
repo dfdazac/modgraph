@@ -88,36 +88,37 @@ class GAE(nn.Module):
         return cost
 
 
-class Node2VecEncoder:
+class Node2VecEncoder(nn.Module):
     def __init__(self, embeddings):
+        super(Node2VecEncoder, self).__init__()
         self.embeddings = embeddings
 
-    def __call__(self, data, edge_index):
+    def forward(self, data, edge_index, *args, **kwargs):
         return self.embeddings
 
 
-class Node2Vec:
-    node2vec_path = '../snap/examples/node2vec/node2vec'
+class Node2Vec(nn.Module):
+    node2vec_bin_path = '../snap/examples/node2vec/node2vec'
 
     def __init__(self, edge_index, path, num_nodes, dim=128):
+        super(Node2Vec, self).__init__()
         # Write edge list
         edges_path = path + '.edges'
         embs_path = path + '.emb'
-        #np.savetxt(edges_path, edge_index.cpu().numpy().T, fmt='%d %d')
+        np.savetxt(edges_path, edge_index.cpu().numpy().T, fmt='%d %d')
 
         # Call node2vec
-        #subprocess.run([self.node2vec_path,
-        #                f'-i:{edges_path}',
-        #                f'-o:{embs_path}',
-        #                f'-d:{dim:d}', '-v'])
+        subprocess.run([self.node2vec_bin_path,
+                        f'-i:{edges_path}',
+                        f'-o:{embs_path}',
+                        f'-d:{dim:d}', '-v'])
 
         # Read embeddings and store in encoder
         emb_data = np.loadtxt(embs_path, skiprows=1)
         embeddings = np.zeros([num_nodes, emb_data.shape[1] - 1])
         idx = emb_data[:, 0].astype(np.int)
         embeddings[idx] = emb_data[:, 1:]
-        all_embs = nn.Embedding(num_nodes, dim,
-                                _weight=torch.from_numpy(embeddings))
+        all_embs = torch.tensor(embeddings, dtype=torch.float32)
         self.encoder = Node2VecEncoder(all_embs)
 
 
