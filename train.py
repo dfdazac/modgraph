@@ -195,7 +195,7 @@ def config():
     dataset = 'cora'
     hidden_dims = [128]
     lr = 0.001
-    epochs = 1
+    epochs = 200
     random_splits = True
 
 
