@@ -132,6 +132,7 @@ def train_encoder(model_name, device, dataset_str, hidden_dims, lr, epochs,
                                 hidden_dims[-1],
                                 dataset.num_classes).to(device)
 
+    classifier_lr = 0.01 if dataset_str == 'corafull' else 0.001
     classifier_optimizer = torch.optim.Adam(classifier.parameters(), lr=0.001)
 
     if random_splits:

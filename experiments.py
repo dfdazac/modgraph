@@ -14,8 +14,10 @@ config = {'model_name': None,
           'random_splits': True}
 
 # Values to be changed in experiments
-param_grid = {'model_name': ('gae', 'dgi'),
-              'dataset': ('corafull',),
+param_grid = {'model_name': ('gae', 'dgi', 'node2vec'),
+              'dataset': ('cora', 'citeseer', 'pubmed', 'corafull',
+                          'coauthorcs', 'coauthorphys', 'amazoncomp',
+                          'amazonphoto'),
               'hidden_dims': ([256, 128],),
               'lr': (0.01, 0.005, 0.001)}
 
