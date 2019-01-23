@@ -63,9 +63,13 @@ def train_encoder(model_name, device, dataset_str, hidden_dims, lr, epochs,
 
     data = dataset[0]
 
-    positive_splits, negative_splits = split_edges(data.edge_index)
+    add_self_connections = model_name == 'node2vec'
+    positive_splits, negative_splits = split_edges(data.edge_index, add_self_connections)
     train_pos, val_pos, test_pos = positive_splits
     train_neg, val_neg, test_neg = negative_splits
+    # Add edges in reverse direction for encoding
+    train_pos = add_reverse_edges(train_pos).to(device)
+    train_neg = add_reverse_edges(train_neg).to(device)
 
     # Create model
     if model_name == 'dgi':
@@ -80,9 +84,6 @@ def train_encoder(model_name, device, dataset_str, hidden_dims, lr, epochs,
     if model_name != 'node2vec':
         # During unsupervised learning we only need features on device
         data.x = data.x.to(device)
-        # Add edges in reverse direction for encoding
-        train_pos = add_reverse_edges(train_pos).to(device)
-        train_neg = add_reverse_edges(train_neg).to(device)
 
         model = model_class(dataset.num_features, hidden_dims).to(device)
 
@@ -132,8 +133,7 @@ def train_encoder(model_name, device, dataset_str, hidden_dims, lr, epochs,
                                 hidden_dims[-1],
                                 dataset.num_classes).to(device)
 
-    classifier_lr = 0.01 if dataset_str == 'corafull' else 0.001
-    classifier_optimizer = torch.optim.Adam(classifier.parameters(), lr=0.001)
+    classifier_optimizer = torch.optim.Adam(classifier.parameters(), lr=0.01)
 
     if random_splits:
         data = shuffle_graph_labels(data, train_examples_per_class,
@@ -193,7 +193,7 @@ def config():
     model_name = 'node2vec'
     device = 'cpu'
     dataset = 'cora'
-    hidden_dims = [128]
+    hidden_dims = [256, 128]
     lr = 0.001
     epochs = 200
     random_splits = True

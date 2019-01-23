@@ -122,6 +122,7 @@ class Node2Vec(nn.Module):
         self.encoder = Node2VecEncoder(all_embs)
 
 
+
 class NodeClassifier(nn.Module):
     def __init__(self, encoder, hidden_dim, num_classes):
         super(NodeClassifier, self).__init__()

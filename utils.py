@@ -18,7 +18,7 @@ def sample_zero_entries(mat):
             nonzero_or_sampled.add((t[1], t[0]))
 
 
-def split_edges(edge_index):
+def split_edges(edge_index, add_self_connections=False):
     """Obtain positive and negative train/val/test edges for an *undirected*
     graph given m an edge index (as the one used in the
     torch_geometric.datasets.Planetoid class).
@@ -29,6 +29,9 @@ def split_edges(edge_index):
     # Remove diagonal elements
     adj = adj - sp.dia_matrix((adj.diagonal()[np.newaxis, :], [0]),
                                shape=adj.shape)
+    if add_self_connections:
+        adj = adj + sp.identity(adj.shape[0])
+
     adj.eliminate_zeros()
 
     adj_triu = sp.triu(adj)
