@@ -133,3 +133,4 @@ runs/*
 # node2vec embeddings
 node2vec/*
 !node2vec/.gitkeep
+!node2vec/src/

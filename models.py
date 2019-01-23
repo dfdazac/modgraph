@@ -98,7 +98,7 @@ class Node2VecEncoder(nn.Module):
 
 
 class Node2Vec(nn.Module):
-    node2vec_bin_path = '../snap/examples/node2vec/node2vec'
+    node2vec_path = 'node2vec/src/main.py'
 
     def __init__(self, edge_index, path, num_nodes, dim=128):
         super(Node2Vec, self).__init__()
@@ -107,11 +107,12 @@ class Node2Vec(nn.Module):
         embs_path = path + '.emb'
         np.savetxt(edges_path, edge_index.cpu().numpy().T, fmt='%d %d')
 
-        # Call node2vec
-        subprocess.run([self.node2vec_bin_path,
-                        f'-i:{edges_path}',
-                        f'-o:{embs_path}',
-                        f'-d:{dim:d}', '-v'])
+        subprocess.run(['python',
+                        self.node2vec_path,
+                        '--input', edges_path,
+                        '--output', embs_path,
+                        '--dimensions', str(dim),
+                        '--workers', '16'])
 
         # Read embeddings and store in encoder
         emb_data = np.loadtxt(embs_path, skiprows=1)
