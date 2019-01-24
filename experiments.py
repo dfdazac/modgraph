@@ -2,8 +2,7 @@ import torch
 from train import ex
 from sklearn.model_selection import ParameterGrid
 
-#device = 'cuda' if torch.cuda.is_available() else 'cpu'
-device = 'cpu'
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 # Configuration template
 config = {'model_name': None,
@@ -20,7 +19,9 @@ param_grid = {'model_name': ['gae'],
               'dataset': ('cora', 'citeseer', 'pubmed', 'corafull',
                           'coauthorcs', 'coauthorphys', 'amazoncomp',
                           'amazonphoto'),
-              'hidden_dims': ([256, 128],)}
+              'hidden_dims': ([256, 128],),
+              'lr': [0.005, 0.001],
+              'rec_weight': [0.1, 0.5, 1.0]}
 
 grid = ParameterGrid(param_grid)
 

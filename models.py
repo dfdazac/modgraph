@@ -84,7 +84,7 @@ class GAE(nn.Module):
             modules.append(nn.Linear(hidden_dims[0], input_feat_dim))
             modules.append(nn.ReLU())
             self.decoder = nn.Sequential(*modules)
-            self.rec_loss = nn.BCEWithLogitsLoss()
+            self.rec_loss = nn.MSELoss()
         else:
             self.rec_loss = None
 
