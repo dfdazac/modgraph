@@ -41,7 +41,7 @@ def eval_link_prediction(emb, edges_pos, edges_neg):
 
 
 def train_encoder(model_name, device, dataset_str, hidden_dims, lr, epochs,
-                  random_splits):
+                  random_splits, rec_weight):
     now = datetime.now().strftime('%Y-%m-%d-%H%M%S')
 
     if not torch.cuda.is_available() and device.startswith('cuda'):
@@ -85,7 +85,7 @@ def train_encoder(model_name, device, dataset_str, hidden_dims, lr, epochs,
         # During unsupervised learning we only need features on device
         data.x = data.x.to(device)
 
-        model = model_class(dataset.num_features, hidden_dims).to(device)
+        model = model_class(dataset.num_features, hidden_dims, rec_weight).to(device)
 
         # Train model
         ckpt_name = '.ckpt'
@@ -190,18 +190,19 @@ ex.observers.append(MongoObserver.create(url='mongodb://daniel:daniel1@ds151814.
 
 @ex.config
 def config():
-    model_name = 'node2vec'
-    device = 'cpu'
+    model_name = 'gae'
+    device = 'cuda'
     dataset = 'cora'
     hidden_dims = [256, 128]
     lr = 0.001
     epochs = 200
     random_splits = True
+    rec_weight = 0.5
 
 
 @ex.automain
 def run_experiments(model_name, device, dataset, hidden_dims, lr, epochs,
-                    random_splits, _run):
+                    random_splits, rec_weight, _run):
     torch.random.manual_seed(42)
     np.random.seed(42)
     n_exper = 20
@@ -210,7 +211,7 @@ def run_experiments(model_name, device, dataset, hidden_dims, lr, epochs,
     for i in range(n_exper):
         print('\nTrial {:d}/{:d}'.format(i + 1, n_exper))
         results[i] = train_encoder(model_name, device, dataset, hidden_dims,
-                                   lr, epochs, random_splits)
+                                   lr, epochs, random_splits, rec_weight)
 
     mean = np.mean(results, axis=0)
     std = np.std(results, axis=0)

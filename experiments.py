@@ -2,7 +2,8 @@ import torch
 from train import ex
 from sklearn.model_selection import ParameterGrid
 
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
+#device = 'cuda' if torch.cuda.is_available() else 'cpu'
+device = 'cpu'
 
 # Configuration template
 config = {'model_name': None,
@@ -11,15 +12,15 @@ config = {'model_name': None,
           'hidden_dims': None,
           'lr': None,
           'epochs': 200,
-          'random_splits': True}
+          'random_splits': True,
+          'rec_weight': 0}
 
 # Values to be changed in experiments
-param_grid = {'model_name': ('gae', 'dgi'),
+param_grid = {'model_name': ['gae'],
               'dataset': ('cora', 'citeseer', 'pubmed', 'corafull',
                           'coauthorcs', 'coauthorphys', 'amazoncomp',
                           'amazonphoto'),
-              'hidden_dims': ([256, 128],),
-              'lr': (0.01, 0.005, 0.001)}
+              'hidden_dims': ([256, 128],)}
 
 grid = ParameterGrid(param_grid)
 
