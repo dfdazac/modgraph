@@ -11,7 +11,7 @@ from sacred import Experiment
 from sacred.observers import MongoObserver
 
 from utils import split_edges, add_reverse_edges, shuffle_graph_labels
-from models import GAE, DGI, Node2Vec, NodeClassifier
+from models import MLPEncoder, GraphEncoder, GAE, DGI, Node2Vec, NodeClassifier
 
 
 def eval_link_prediction(emb, edges_pos, edges_neg):
@@ -41,7 +41,7 @@ def eval_link_prediction(emb, edges_pos, edges_neg):
 
 
 def train_encoder(model_name, device, dataset_str, hidden_dims, lr, epochs,
-                  random_splits, rec_weight):
+                  random_splits, rec_weight, encoder):
     now = datetime.now().strftime('%Y-%m-%d-%H%M%S')
 
     if not torch.cuda.is_available() and device.startswith('cuda'):
@@ -81,11 +81,19 @@ def train_encoder(model_name, device, dataset_str, hidden_dims, lr, epochs,
     else:
         raise ValueError(f'Unknown model {model_name}')
 
+    if encoder == 'mlp':
+        encoder_class = MLPEncoder
+    elif encoder == 'gcn':
+        encoder_class = GraphEncoder
+    else:
+        raise ValueError(f'Unknown encoder {encoder}')
+
     if model_name != 'node2vec':
         # During unsupervised learning we only need features on device
         data.x = data.x.to(device)
 
-        model = model_class(dataset.num_features, hidden_dims, rec_weight).to(device)
+        model = model_class(dataset.num_features, hidden_dims, encoder_class,
+                            rec_weight).to(device)
 
         # Train model
         ckpt_name = '.ckpt'
@@ -197,21 +205,23 @@ def config():
     lr = 0.001
     epochs = 200
     random_splits = True
-    rec_weight = 0.5
+    rec_weight = 0
+    encoder = 'mlp'
 
 
 @ex.automain
 def run_experiments(model_name, device, dataset, hidden_dims, lr, epochs,
-                    random_splits, rec_weight, _run):
+                    random_splits, rec_weight, encoder, _run):
     torch.random.manual_seed(42)
     np.random.seed(42)
-    n_exper = 20
+    n_exper = 1
     results = np.empty([n_exper, 3])
 
     for i in range(n_exper):
         print('\nTrial {:d}/{:d}'.format(i + 1, n_exper))
         results[i] = train_encoder(model_name, device, dataset, hidden_dims,
-                                   lr, epochs, random_splits, rec_weight)
+                                   lr, epochs, random_splits, rec_weight,
+                                   encoder)
 
     mean = np.mean(results, axis=0)
     std = np.std(results, axis=0)

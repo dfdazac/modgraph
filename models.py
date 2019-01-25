@@ -1,4 +1,3 @@
-import os.path as osp
 import subprocess
 
 import torch
@@ -9,7 +8,7 @@ import numpy as np
 
 class MLPEncoder(nn.Module):
     def __init__(self, input_feat_dim, hidden_dims, *args):
-        super(GraphEncoder, self).__init__()
+        super(MLPEncoder, self).__init__()
 
         self.layers = nn.ModuleList([nn.Linear(input_feat_dim, hidden_dims[0],
                                                bias=False),
@@ -77,9 +76,9 @@ class Discriminator(nn.Module):
         return x
 
 class DGI(nn.Module):
-    def __init__(self, input_dim, hidden_dims, *args):
+    def __init__(self, input_dim, hidden_dims, encoder_class, *args):
         super(DGI, self).__init__()
-        self.encoder = GraphEncoder(input_dim, hidden_dims)
+        self.encoder = encoder_class(input_dim, hidden_dims)
         self.discriminator = Discriminator(hidden_dims[-1])
         self.loss = nn.BCEWithLogitsLoss()
 
@@ -97,9 +96,9 @@ class DGI(nn.Module):
         return l1 + l2
 
 class GAE(nn.Module):
-    def __init__(self, input_feat_dim, hidden_dims, rec_weight=0):
+    def __init__(self, input_feat_dim, hidden_dims, encoder_class, rec_weight=0):
         super(GAE, self).__init__()
-        self.encoder = GraphEncoder(input_feat_dim, hidden_dims)
+        self.encoder = encoder_class(input_feat_dim, hidden_dims)
         self.loss_fn = nn.BCEWithLogitsLoss()
 
         # Feature reconstruction objective using symmetric decoder
