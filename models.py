@@ -7,6 +7,34 @@ from torch_geometric.nn import GCNConv
 from torch_geometric.nn.inits import glorot
 import numpy as np
 
+class MLPEncoder(nn.Module):
+    def __init__(self, input_feat_dim, hidden_dims, *args):
+        super(GraphEncoder, self).__init__()
+
+        self.layers = nn.ModuleList([nn.Linear(input_feat_dim, hidden_dims[0],
+                                               bias=False),
+                                     nn.PReLU(hidden_dims[0])])
+
+        for i in range(1, len(hidden_dims)):
+            self.layers.append(nn.Linear(hidden_dims[i - 1], hidden_dims[i],
+                                         bias=False))
+            self.layers.append(nn.PReLU(hidden_dims[i]))
+
+    def forward(self, data, edge_index, corrupt=False):
+        if corrupt:
+            perm = torch.randperm(data.num_nodes)
+            x = data.x[perm]
+        else:
+            x = data.x
+
+        z = self.layers[1](self.layers[0](x))
+
+        for i in range(2, len(self.layers), 2):
+            z = self.layers[i + 1](self.layers[i](z))
+
+        return z
+
+
 class GraphEncoder(nn.Module):
     def __init__(self, input_feat_dim, hidden_dims, *args):
         super(GraphEncoder, self).__init__()
