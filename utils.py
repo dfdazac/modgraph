@@ -18,13 +18,15 @@ def sample_zero_entries(mat):
             nonzero_or_sampled.add((t[1], t[0]))
 
 
-def split_edges(edge_index, add_self_connections=False):
+def split_edges(edge_index, seed, add_self_connections=False):
     """Obtain positive and negative train/val/test edges for an *undirected*
     graph given m an edge index (as the one used in the
     torch_geometric.datasets.Planetoid class).
     Args:
         - edge_index: tensor, (2, N), N is the number of edges.
     """
+    np.random.seed(seed)
+
     adj = adj_from_edge_index(edge_index)
     # Remove diagonal elements
     adj = adj - sp.dia_matrix((adj.diagonal()[np.newaxis, :], [0]),
@@ -94,8 +96,11 @@ def adj_from_edge_index(edge_index):
     boolean_adj = partial_adj + partial_adj.T
     return boolean_adj.astype(np.int64).tocsr()
 
+
 def shuffle_graph_labels(data, train_examples_per_class,
-                         val_examples_per_class):
+                         val_examples_per_class, seed):
+    np.random.seed(seed)
+
     data.train_mask = torch.zeros(data.num_nodes, dtype=torch.uint8)
     data.val_mask = torch.zeros_like(data.train_mask)
     data.test_mask = torch.zeros_like(data.train_mask)

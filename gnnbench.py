@@ -78,7 +78,7 @@ def read_gnnbenchmark_data(raw_dir, filename, underrepresented_classes,
                 y=torch.tensor(graph.labels, dtype=torch.int64))
 
     data = shuffle_graph_labels(data, train_examples_per_class,
-                                val_examples_per_class)
+                                val_examples_per_class, seed=0)
 
     return data
 

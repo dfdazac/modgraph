@@ -41,7 +41,7 @@ def eval_link_prediction(emb, edges_pos, edges_neg):
 
 
 def train_encoder(model_name, device, dataset_str, hidden_dims, lr, epochs,
-                  random_splits, rec_weight, encoder):
+                  random_splits, rec_weight, encoder, seed):
     now = datetime.now().strftime('%Y-%m-%d-%H%M%S')
 
     if not torch.cuda.is_available() and device.startswith('cuda'):
@@ -64,7 +64,8 @@ def train_encoder(model_name, device, dataset_str, hidden_dims, lr, epochs,
     data = dataset[0]
 
     add_self_connections = model_name == 'node2vec'
-    positive_splits, negative_splits = split_edges(data.edge_index, add_self_connections)
+    positive_splits, negative_splits = split_edges(data.edge_index, seed,
+                                                   add_self_connections)
     train_pos, val_pos, test_pos = positive_splits
     train_neg, val_neg, test_neg = negative_splits
     # Add edges in reverse direction for encoding
@@ -145,7 +146,7 @@ def train_encoder(model_name, device, dataset_str, hidden_dims, lr, epochs,
 
     if random_splits:
         data = shuffle_graph_labels(data, train_examples_per_class,
-                                    val_examples_per_class)
+                                    val_examples_per_class, seed)
 
     # For supervised learning we need features and labels on device
     data = data.to(device)
@@ -198,8 +199,8 @@ ex.observers.append(MongoObserver.create(url='mongodb://daniel:daniel1@ds151814.
 
 @ex.config
 def config():
-    model_name = 'gae'
-    device = 'cuda'
+    model_name = 'dgi'
+    device = 'cpu'
     dataset = 'cora'
     hidden_dims = [256, 128]
     lr = 0.001
@@ -214,14 +215,14 @@ def run_experiments(model_name, device, dataset, hidden_dims, lr, epochs,
                     random_splits, rec_weight, encoder, _run):
     torch.random.manual_seed(42)
     np.random.seed(42)
-    n_exper = 1
+    n_exper = 20
     results = np.empty([n_exper, 3])
 
     for i in range(n_exper):
         print('\nTrial {:d}/{:d}'.format(i + 1, n_exper))
         results[i] = train_encoder(model_name, device, dataset, hidden_dims,
                                    lr, epochs, random_splits, rec_weight,
-                                   encoder)
+                                   encoder, seed=i)
 
     mean = np.mean(results, axis=0)
     std = np.std(results, axis=0)
