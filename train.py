@@ -1,5 +1,6 @@
 from datetime import datetime
 import os.path as osp
+import os
 
 import torch
 import torch.nn.functional as F
@@ -41,7 +42,8 @@ def eval_link_prediction(emb, edges_pos, edges_neg):
 
 
 def train_encoder(model_name, device, dataset_str, hidden_dims, lr, epochs,
-                  random_splits, rec_weight, encoder, seed):
+                  random_splits, rec_weight, encoder, seed,
+                  train_examples_per_class, val_examples_per_class):
     now = datetime.now().strftime('%Y-%m-%d-%H%M%S')
 
     if not torch.cuda.is_available() and device.startswith('cuda'):
@@ -52,14 +54,15 @@ def train_encoder(model_name, device, dataset_str, hidden_dims, lr, epochs,
 
     # Load data
     path = osp.join(osp.dirname(osp.realpath(__file__)), 'data', dataset_str)
-    train_examples_per_class = 20
-    val_examples_per_class = 30
+
     if dataset_str in ('cora', 'citeseer', 'pubmed'):
         dataset = Planetoid(path, dataset_str)
     elif dataset_str in ('corafull', 'coauthorcs', 'coauthorphys', 'amazoncomp',
                      'amazonphoto'):
         dataset = GNNBenchmark(path, dataset_str, train_examples_per_class,
                                val_examples_per_class)
+    else:
+        raise ValueError(f'Unknown dataset {dataset_str}')
 
     data = dataset[0]
 
@@ -193,26 +196,36 @@ def train_encoder(model_name, device, dataset_str, hidden_dims, lr, epochs,
 
 
 ex = Experiment()
-ex.observers.append(MongoObserver.create(url='mongodb://daniel:daniel1@ds151814.mlab.com:51814/experiments',
-                                         db_name='experiments'))
+# Set up database logs
+user = os.environ.get('MLAB_USR')
+password = os.environ.get('MLAB_PWD')
+database = os.environ.get('MLAB_DB')
+if all([user, password, database]):
+    url = f'mongodb://{user}:{password}@ds135812.mlab.com:35812/{database}'
+    ex.observers.append(MongoObserver.create(url, database))
+else:
+    print('Running without observers')
 
 
 @ex.config
 def config():
-    model_name = 'dgi'
-    device = 'cpu'
+    model_name = 'gae'
+    device = 'cuda'
     dataset = 'cora'
     hidden_dims = [256, 128]
     lr = 0.001
     epochs = 200
     random_splits = True
     rec_weight = 0
-    encoder = 'mlp'
+    encoder = 'gcn'
+    train_examples_per_class = 20
+    val_examples_per_class = 30
 
 
 @ex.automain
 def run_experiments(model_name, device, dataset, hidden_dims, lr, epochs,
-                    random_splits, rec_weight, encoder, _run):
+                    random_splits, rec_weight, encoder,
+                    train_examples_per_class, val_examples_per_class, _run):
     torch.random.manual_seed(42)
     np.random.seed(42)
     n_exper = 20
@@ -220,9 +233,11 @@ def run_experiments(model_name, device, dataset, hidden_dims, lr, epochs,
 
     for i in range(n_exper):
         print('\nTrial {:d}/{:d}'.format(i + 1, n_exper))
+        seed = i
         results[i] = train_encoder(model_name, device, dataset, hidden_dims,
                                    lr, epochs, random_splits, rec_weight,
-                                   encoder, seed=i)
+                                   encoder, seed, train_examples_per_class,
+                                   val_examples_per_class)
 
     mean = np.mean(results, axis=0)
     std = np.std(results, axis=0)

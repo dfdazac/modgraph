@@ -105,8 +105,6 @@ def shuffle_graph_labels(data, train_examples_per_class,
     data.val_mask = torch.zeros_like(data.train_mask)
     data.test_mask = torch.zeros_like(data.train_mask)
 
-    # Sample 20 nodes per label for training, 30 per label for validation,
-    # and the rest for testing
     labels = np.unique(data.y.cpu().numpy())
     n_train = train_examples_per_class
     n_val = val_examples_per_class

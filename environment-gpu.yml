@@ -61,5 +61,4 @@ dependencies:
     - torch-sparse==0.2.2
     - torch-spline-conv==1.0.4
     - wrapt==1.11.0
-prefix: /home/daniel/miniconda3/envs/pygeom
 
