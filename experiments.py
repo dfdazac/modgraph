@@ -8,12 +8,12 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 config = {'model_name': None,
           'device': device,
           'dataset': None,
-          'hidden_dims': ([256, 128],),
+          'hidden_dims': [256, 128],
           'lr': 0.001,
           'epochs': 200,
           'random_splits': True,
           'rec_weight': 0,
-          'encoder': None,
+          'encoder': 'gcn',
           'train_examples_per_class': 20,
           'val_examples_per_class': 30}
 
