@@ -66,21 +66,22 @@ def plot_label_rate(id_low, id_high, dataset):
     dgi_results = get_label_rate_results(database, 'dgi', id_low, id_high,
                                          dataset)
 
-    plt.figure(figsize=(5, 5))
-    plt.plot(gae_results[0], gae_results[1], '.-', label='GAE')
+    plt.figure(figsize=(2.5, 2.5))
+    plt.plot(gae_results[0], gae_results[1], '.-', label='GAE', linewidth=1)
     plt.fill_between(gae_results[0], gae_results[1] - gae_results[2],
                      gae_results[1] + gae_results[2], alpha=0.25)
 
-    plt.plot(dgi_results[0], dgi_results[1], 'r.--', label='DGI')
+    plt.plot(dgi_results[0], dgi_results[1], 'r.--', label='DGI', linewidth=1)
     plt.fill_between(dgi_results[0], dgi_results[1] - dgi_results[2],
                      dgi_results[1] + dgi_results[2], alpha=0.2)
 
-    xticks = [i for i in range(2, len(gae_results[0]), 2)]
+    xticks = [i for i in range(2, np.max(gae_results[0]) + 1, 4)]
     plt.xticks(xticks, xticks)
     plt.legend(loc='lower right')
     plt.xlabel('Nodes per class')
     plt.ylabel('Accuracy')
     plt.title(dataset.capitalize())
+    plt.tight_layout()
     plt.show()
 
 
