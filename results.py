@@ -1,10 +1,14 @@
 import os
 
 from pymongo import MongoClient
+from matplotlib import rcParams
+rcParams['font.family'] = 'sans-serif'
+rcParams['font.sans-serif'] = ['Helvetica Neue']
 import matplotlib.pyplot as plt
+import numpy as np
 
 def get_database():
-    """Get a MongoClient using credentials in environment variables """
+    """Get a MongoDB database using credentials in environment variables """
     user = os.environ.get('MLAB_USR')
     password = os.environ.get('MLAB_PWD')
     database = os.environ.get('MLAB_DB')
@@ -16,13 +20,14 @@ def get_database():
     return MongoClient(url)[database]
 
 
-def get_label_rate_results(database, model_name, id_low, id_high):
+def get_label_rate_results(database, model_name, id_low, id_high, dataset):
     """Get accuracy results for a given model, with different label rates.
     Args:
         - client: a MongoClient to connect with the database
         - model_name: str
         - id_low: int, lowest id (inclusive) to search for results
         - id_high: int, highest id (inclusive) to search for results
+        - dataset: str, name of the dataset to get results for
     Return:
         - train_examples: list, number of labeled nodes during training
         - accuracies: list
@@ -37,7 +42,8 @@ def get_label_rate_results(database, model_name, id_low, id_high):
     accuracies = []
     stdevs = []
     for res in results:
-        if res['config']['model_name'] != model_name:
+        if (res['config']['model_name'] != model_name
+                or res['config']['dataset'] != dataset):
             continue
 
         run_id = res['_id']
@@ -49,21 +55,35 @@ def get_label_rate_results(database, model_name, id_low, id_high):
                                  'name': {'$eq': 'ACC std'}}))
         stdevs.append(std['values'][-1])
 
-    return train_examples, accuracies, stdevs
+    return np.array(train_examples), np.array(accuracies), np.array(stdevs)
 
 
-def plot_label_rate():
+def plot_label_rate(id_low, id_high, dataset):
     database = get_database()
-    id_low, id_high = 105, 126
-    #id_low, id_high = 127, 148
 
-    gae_results = get_label_rate_results(database, 'gae', id_low, id_high)
-    dgi_results = get_label_rate_results(database, 'dgi', id_low, id_high)
+    gae_results = get_label_rate_results(database, 'gae', id_low, id_high,
+                                         dataset)
+    dgi_results = get_label_rate_results(database, 'dgi', id_low, id_high,
+                                         dataset)
 
-    plt.plot(gae_results[0], gae_results[1], label='GAE')
-    plt.plot(dgi_results[0], dgi_results[1], label='DGI')
-    plt.legend()
+    plt.figure(figsize=(5, 5))
+    plt.plot(gae_results[0], gae_results[1], '.-', label='GAE')
+    plt.fill_between(gae_results[0], gae_results[1] - gae_results[2],
+                     gae_results[1] + gae_results[2], alpha=0.25)
+
+    plt.plot(dgi_results[0], dgi_results[1], 'r.--', label='DGI')
+    plt.fill_between(dgi_results[0], dgi_results[1] - dgi_results[2],
+                     dgi_results[1] + dgi_results[2], alpha=0.2)
+
+    xticks = [i for i in range(2, len(gae_results[0]), 2)]
+    plt.xticks(xticks, xticks)
+    plt.legend(loc='lower right')
+    plt.xlabel('Nodes per class')
+    plt.ylabel('Accuracy')
+    plt.title(dataset.capitalize())
     plt.show()
 
 
-plot_label_rate()
+plot_label_rate(105, 170, 'cora')
+plot_label_rate(105, 170, 'citeseer')
+plot_label_rate(105, 170, 'pubmed')
