@@ -19,11 +19,8 @@ config = {'model_name': None,
 
 # Values to be changed in experiments
 param_grid = {'model_name': ['gae', 'dgi'],
-              'dataset': ('citeseer', 'pubmed', 'corafull',
-                          'coauthorcs', 'coauthorphys', 'amazoncomp',
-                          'amazonphoto'),
-              'lr': [0.005, 0.001, 0.0001],
-              'encoder': ['mlp', 'gcn']}
+              'dataset': ('cora', 'citeseer', 'pubmed'),
+              'train_examples_per_class': [1] + [i for i in range(2, 21, 2)]}
 
 grid = ParameterGrid(param_grid)
 
