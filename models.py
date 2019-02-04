@@ -9,6 +9,7 @@ import scipy.sparse as sp
 
 from utils import adj_from_edge_index
 from g2g.model import Graph2Gauss
+from g2g.utils import score_link_prediction
 
 class MLPEncoder(nn.Module):
     def __init__(self, input_feat_dim, hidden_dims, *args):
@@ -198,6 +199,11 @@ class G2G(nn.Module):
         mu, sigma = session.run([g2g.mu, g2g.sigma])
         all_embs = torch.tensor(mu, dtype=torch.float32)
         self.encoder = LookupEncoder(all_embs)
+
+        test_scores = session.run(g2g.neg_test_energy, g2g.feed_dict)
+        self.test_auc, self.test_ap = score_link_prediction(g2g.test_ground_truth,
+                                                            test_scores)
+
 
 
 class NodeClassifier(nn.Module):

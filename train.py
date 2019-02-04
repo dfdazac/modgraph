@@ -141,9 +141,14 @@ def train_encoder(model_name, device, dataset_str, hidden_dims, lr, epochs,
     else:
         raise ValueError
 
-    model.eval()
-    embeddings = model.encoder(data, train_pos).cpu().detach()
-    auc, ap = eval_link_prediction(embeddings, test_pos, test_neg)
+    if model_name == 'graph2gauss':
+        # graph2gauss link prediction is already evaluated with the KL div
+        auc, ap = model.test_auc, model.test_ap
+    else:
+        model.eval()
+        embeddings = model.encoder(data, train_pos).cpu().detach()
+        auc, ap = eval_link_prediction(embeddings, test_pos, test_neg)
+
     print('\ntest_auc: {:6f}, test_ap: {:6f}'.format(auc, ap))
 
     # Evaluate embeddings in node classification
@@ -219,7 +224,7 @@ else:
 def config():
     model_name = 'graph2gauss'
     device = 'cuda'
-    dataset = 'cora'
+    dataset = 'citeseer'
     hidden_dims = [256, 128]
     lr = 0.001
     epochs = 200
