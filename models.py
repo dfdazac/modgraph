@@ -5,6 +5,10 @@ import torch.nn as nn
 from torch_geometric.nn import GCNConv
 from torch_geometric.nn.inits import glorot
 import numpy as np
+import scipy.sparse as sp
+
+from utils import adj_from_edge_index
+from g2g.model import Graph2Gauss
 
 class MLPEncoder(nn.Module):
     def __init__(self, input_feat_dim, hidden_dims, *args):
@@ -133,10 +137,16 @@ class GAE(nn.Module):
         return cost
 
 
-class Node2VecEncoder(nn.Module):
+class LookupEncoder(nn.Module):
+    """Dummy encoder class to store embeddings from some algorithms,
+    e.g. node2vec, as a lookup table.
+    Args:
+        - embeddings: (N, D) tensor, N is the number of nodes, D the dimension
+            of the embeddings
+    """
     def __init__(self, embeddings):
-        super(Node2VecEncoder, self).__init__()
-        self.embeddings = embeddings
+        super(LookupEncoder, self).__init__()
+        self.embeddings = nn.Parameter(embeddings)
 
     def forward(self, data, edge_index, *args, **kwargs):
         return self.embeddings
@@ -165,8 +175,29 @@ class Node2Vec(nn.Module):
         idx = emb_data[:, 0].astype(np.int)
         embeddings[idx] = emb_data[:, 1:]
         all_embs = torch.tensor(embeddings, dtype=torch.float32)
-        self.encoder = Node2VecEncoder(all_embs)
+        self.encoder = LookupEncoder(all_embs)
 
+
+class G2G(nn.Module):
+    def __init__(self, data, n_hidden, dim, K, train_ones, val_ones, val_zeros,
+                 test_ones, test_zeros):
+        super(G2G, self).__init__()
+
+        train_ones = train_ones.cpu().numpy().T
+        val_ones = val_ones.cpu().numpy().T
+        val_zeros = val_zeros.cpu().numpy().T
+        test_ones = test_ones.cpu().numpy().T
+        test_zeros = test_zeros.cpu().numpy().T
+
+        A = adj_from_edge_index(data.edge_index)
+        X = sp.csr_matrix(data.x.cpu().numpy())
+
+        g2g = Graph2Gauss(A, X, dim, train_ones, val_ones, val_zeros,
+                          test_ones, test_zeros, K, n_hidden=n_hidden)
+        session = g2g.train()
+        mu, sigma = session.run([g2g.mu, g2g.sigma])
+        all_embs = torch.tensor(mu, dtype=torch.float32)
+        self.encoder = LookupEncoder(all_embs)
 
 
 class NodeClassifier(nn.Module):

@@ -12,7 +12,8 @@ from sacred import Experiment
 from sacred.observers import MongoObserver
 
 from utils import split_edges, add_reverse_edges, shuffle_graph_labels
-from models import MLPEncoder, GraphEncoder, GAE, DGI, Node2Vec, NodeClassifier
+from models import MLPEncoder, GraphEncoder, GAE, DGI, Node2Vec,\
+    NodeClassifier, G2G
 
 
 def eval_link_prediction(emb, edges_pos, edges_neg):
@@ -80,7 +81,7 @@ def train_encoder(model_name, device, dataset_str, hidden_dims, lr, epochs,
         model_class = DGI
     elif model_name == 'gae':
         model_class = GAE
-    elif model_name == 'node2vec':
+    elif model_name in ['node2vec', 'graph2gauss']:
         pass
     else:
         raise ValueError(f'Unknown model {model_name}')
@@ -92,7 +93,7 @@ def train_encoder(model_name, device, dataset_str, hidden_dims, lr, epochs,
     else:
         raise ValueError(f'Unknown encoder {encoder}')
 
-    if model_name != 'node2vec':
+    if model_name in ['gae', 'dgi']:
         # During unsupervised learning we only need features on device
         data.x = data.x.to(device)
 
@@ -129,10 +130,16 @@ def train_encoder(model_name, device, dataset_str, hidden_dims, lr, epochs,
 
         # Evaluate on test edges
         model.load_state_dict(torch.load(osp.join(ckpt_name)))
-    else:
+    elif model_name == 'node2vec':
         path = osp.join(osp.dirname(osp.realpath(__file__)), 'node2vec',
                         dataset_str)
         model = Node2Vec(train_pos, path, data.num_nodes)
+    elif model_name == 'graph2gauss':
+
+        model = G2G(data, hidden_dims[:-1], hidden_dims[-1], 1, train_pos,
+                    val_pos, val_neg, test_pos, test_neg)
+    else:
+        raise ValueError
 
     model.eval()
     embeddings = model.encoder(data, train_pos).cpu().detach()
@@ -140,6 +147,7 @@ def train_encoder(model_name, device, dataset_str, hidden_dims, lr, epochs,
     print('\ntest_auc: {:6f}, test_ap: {:6f}'.format(auc, ap))
 
     # Evaluate embeddings in node classification
+    data.edge_index = train_pos
     del train_pos, train_neg
     classifier = NodeClassifier(model.encoder,
                                 hidden_dims[-1],
@@ -209,7 +217,7 @@ else:
 
 @ex.config
 def config():
-    model_name = 'gae'
+    model_name = 'graph2gauss'
     device = 'cuda'
     dataset = 'cora'
     hidden_dims = [256, 128]
@@ -228,7 +236,7 @@ def run_experiments(model_name, device, dataset, hidden_dims, lr, epochs,
                     train_examples_per_class, val_examples_per_class, _run):
     torch.random.manual_seed(42)
     np.random.seed(42)
-    n_exper = 20
+    n_exper = 1
     results = np.empty([n_exper, 3])
 
     for i in range(n_exper):

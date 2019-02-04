@@ -7,6 +7,8 @@ rcParams['font.sans-serif'] = ['Helvetica Neue']
 import matplotlib.pyplot as plt
 import numpy as np
 
+#from train import train_encoder
+
 def get_database():
     """Get a MongoDB database using credentials in environment variables """
     user = os.environ.get('MLAB_USR')
@@ -84,7 +86,13 @@ def plot_label_rate(id_low, id_high, dataset):
     plt.tight_layout()
     plt.show()
 
+#plot_label_rate(267, 332, 'cora')
+#plot_label_rate(267, 332, 'citeseer')
+plot_label_rate(267, 332, 'pubmed')
 
-plot_label_rate(105, 170, 'cora')
-plot_label_rate(105, 170, 'citeseer')
-plot_label_rate(105, 170, 'pubmed')
+
+#def plot_embeddings(model_name):
+#    train_encoder(model_name, 'cpu', 'cora', [256, 128], lr=0.001, epochs=200,
+#                  random_splits=True, rec_weight=0, encoder='gcn', seed=42,
+#                  train_examples_per_class=20, val_examples_per_class=30)
+
