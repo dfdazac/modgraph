@@ -18,9 +18,11 @@ config = {'model_name': None,
           'val_examples_per_class': 30}
 
 # Values to be changed in experiments
-param_grid = {'model_name': ['gae', 'dgi'],
-              'dataset': ('cora', 'citeseer', 'pubmed'),
-              'train_examples_per_class': [1] + [i for i in range(2, 21, 2)]}
+param_grid = {'model_name': ['graph2gauss'],
+              'dataset': ('citeseer', 'pubmed', 'corafull',
+                          'coauthorcs', 'coauthorphys', 'amazoncomp',
+                          'amazonphoto'),
+              'lr': [0.005, 0.001, 0.0001]}
 
 grid = ParameterGrid(param_grid)
 
