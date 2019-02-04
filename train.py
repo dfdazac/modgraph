@@ -15,6 +15,20 @@ from utils import split_edges, add_reverse_edges, shuffle_graph_labels
 from models import MLPEncoder, GraphEncoder, GAE, DGI, Node2Vec,\
     NodeClassifier, G2G
 
+def get_dataset(dataset_str, train_examples_per_class, val_examples_per_class):
+    path = osp.join(osp.dirname(osp.realpath(__file__)), 'data', dataset_str)
+
+    if dataset_str in ('cora', 'citeseer', 'pubmed'):
+        dataset = Planetoid(path, dataset_str)
+    elif dataset_str in (
+    'corafull', 'coauthorcs', 'coauthorphys', 'amazoncomp',
+    'amazonphoto'):
+        dataset = GNNBenchmark(path, dataset_str, train_examples_per_class,
+                               val_examples_per_class)
+    else:
+        raise ValueError(f'Unknown dataset {dataset_str}')
+
+    return dataset
 
 def eval_link_prediction(emb, edges_pos, edges_neg):
     """Evaluate the AUC and AP scores when using the provided embeddings to
@@ -54,17 +68,8 @@ def train_encoder(model_name, device, dataset_str, hidden_dims, lr, epochs,
     device = torch.device(device)
 
     # Load data
-    path = osp.join(osp.dirname(osp.realpath(__file__)), 'data', dataset_str)
-
-    if dataset_str in ('cora', 'citeseer', 'pubmed'):
-        dataset = Planetoid(path, dataset_str)
-    elif dataset_str in ('corafull', 'coauthorcs', 'coauthorphys', 'amazoncomp',
-                     'amazonphoto'):
-        dataset = GNNBenchmark(path, dataset_str, train_examples_per_class,
-                               val_examples_per_class)
-    else:
-        raise ValueError(f'Unknown dataset {dataset_str}')
-
+    dataset = get_dataset(dataset_str, train_examples_per_class,
+                          val_examples_per_class)
     data = dataset[0]
 
     add_self_connections = model_name == 'node2vec'
@@ -205,7 +210,7 @@ def train_encoder(model_name, device, dataset_str, hidden_dims, lr, epochs,
     print(log.format(*best_accs))
     test_acc = best_accs[2]
 
-    return auc, ap, test_acc
+    return np.array([auc, ap, test_acc]), model.encoder
 
 
 ex = Experiment()
@@ -222,8 +227,8 @@ else:
 
 @ex.config
 def config():
-    model_name = 'graph2gauss'
-    device = 'cuda'
+    model_name = 'gae'
+    device = 'cpu'
     dataset = 'cora'
     hidden_dims = [256, 128]
     lr = 0.001
@@ -241,16 +246,16 @@ def run_experiments(model_name, device, dataset, hidden_dims, lr, epochs,
                     train_examples_per_class, val_examples_per_class, _run):
     torch.random.manual_seed(42)
     np.random.seed(42)
-    n_exper = 20
+    n_exper = 1
     results = np.empty([n_exper, 3])
 
     for i in range(n_exper):
         print('\nTrial {:d}/{:d}'.format(i + 1, n_exper))
         seed = i
-        results[i] = train_encoder(model_name, device, dataset, hidden_dims,
-                                   lr, epochs, random_splits, rec_weight,
-                                   encoder, seed, train_examples_per_class,
-                                   val_examples_per_class)
+        results[i], _ = train_encoder(model_name, device, dataset, hidden_dims,
+                                      lr, epochs, random_splits, rec_weight,
+                                      encoder, seed, train_examples_per_class,
+                                      val_examples_per_class)
 
     mean = np.mean(results, axis=0)
     std = np.std(results, axis=0)

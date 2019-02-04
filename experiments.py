@@ -19,7 +19,7 @@ config = {'model_name': None,
 
 # Values to be changed in experiments
 param_grid = {'model_name': ['graph2gauss'],
-              'dataset': ('citeseer', 'pubmed', 'corafull',
+              'dataset': ('cora', 'citeseer', 'pubmed', 'corafull',
                           'coauthorcs', 'coauthorphys', 'amazoncomp',
                           'amazonphoto'),
               'lr': [0.005, 0.001, 0.0001]}

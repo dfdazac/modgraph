@@ -6,8 +6,9 @@ rcParams['font.family'] = 'sans-serif'
 rcParams['font.sans-serif'] = ['Helvetica Neue']
 import matplotlib.pyplot as plt
 import numpy as np
+from sklearn.manifold import TSNE
 
-#from train import train_encoder
+from train import get_dataset, train_encoder
 
 def get_database():
     """Get a MongoDB database using credentials in environment variables """
@@ -88,11 +89,30 @@ def plot_label_rate(id_low, id_high, dataset):
 
 #plot_label_rate(267, 332, 'cora')
 #plot_label_rate(267, 332, 'citeseer')
-plot_label_rate(267, 332, 'pubmed')
+#plot_label_rate(267, 332, 'pubmed')
 
 
-#def plot_embeddings(model_name):
-#    train_encoder(model_name, 'cpu', 'cora', [256, 128], lr=0.001, epochs=200,
-#                  random_splits=True, rec_weight=0, encoder='gcn', seed=42,
-#                  train_examples_per_class=20, val_examples_per_class=30)
+def plot_embeddings(model_name, dataset_str):
+    _, encoder = train_encoder(model_name, 'cpu', dataset_str, [256, 128],
+                               lr=0.001, epochs=200, random_splits=False,
+                               rec_weight=0, encoder='gcn', seed=42,
+                               train_examples_per_class=20,
+                               val_examples_per_class=30)
+
+    dataset = get_dataset(dataset_str, train_examples_per_class=20,
+                          val_examples_per_class=30)
+    data = dataset[0]
+
+    embeddings = encoder(data, data.edge_index).detach().numpy()
+
+    z = TSNE(n_components=2).fit_transform(embeddings)
+    labels = data.y.numpy()
+    n_labels = np.unique(labels).size
+    plt.scatter(z[:, 0], z[:, 1], c=data.y.numpy(),
+                cmap=plt.cm.get_cmap("jet", n_labels))
+    plt.show()
+
+
+plot_embeddings('gae', 'cora')
+
 
