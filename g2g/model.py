@@ -16,8 +16,8 @@ class Graph2Gauss:
     """
     def __init__(self, A, X, L, train_ones, val_ones, val_zeros, test_ones,
                  test_zeros, K=1, p_val=0.10, p_test=0.05, p_nodes=0.0,
-                 n_hidden=None, max_iter=2000, tolerance=100, scale=False,
-                 seed=0, verbose=True):
+                 n_hidden=None, max_iter=2000, lr=1e-3, tolerance=100,
+                 scale=False, seed=0, verbose=True):
         """
         Parameters
         ----------
@@ -51,6 +51,8 @@ class Graph2Gauss:
         tf.reset_default_graph()
         tf.set_random_seed(seed)
         np.random.seed(seed)
+
+        self.lr = lr
 
         X = X.astype(np.float32)
 
@@ -264,7 +266,7 @@ class Graph2Gauss:
         early_stopping_score_max = -1.0
         tolerance = self.tolerance
 
-        train_op = tf.train.AdamOptimizer(learning_rate=1e-3).minimize(self.loss)
+        train_op = tf.train.AdamOptimizer(learning_rate=self.lr).minimize(self.loss)
 
         sess = tf.Session(config=tf.ConfigProto(gpu_options=tf.GPUOptions(visible_device_list=gpu_list,
                                                                           allow_growth=True)))

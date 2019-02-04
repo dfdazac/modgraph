@@ -137,7 +137,7 @@ def train_encoder(model_name, device, dataset_str, hidden_dims, lr, epochs,
     elif model_name == 'graph2gauss':
 
         model = G2G(data, hidden_dims[:-1], hidden_dims[-1], 1, train_pos,
-                    val_pos, val_neg, test_pos, test_neg)
+                    val_pos, val_neg, test_pos, test_neg, lr)
     else:
         raise ValueError
 
@@ -224,7 +224,7 @@ else:
 def config():
     model_name = 'graph2gauss'
     device = 'cuda'
-    dataset = 'citeseer'
+    dataset = 'cora'
     hidden_dims = [256, 128]
     lr = 0.001
     epochs = 200
@@ -241,7 +241,7 @@ def run_experiments(model_name, device, dataset, hidden_dims, lr, epochs,
                     train_examples_per_class, val_examples_per_class, _run):
     torch.random.manual_seed(42)
     np.random.seed(42)
-    n_exper = 1
+    n_exper = 20
     results = np.empty([n_exper, 3])
 
     for i in range(n_exper):

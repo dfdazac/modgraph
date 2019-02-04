@@ -181,7 +181,7 @@ class Node2Vec(nn.Module):
 
 class G2G(nn.Module):
     def __init__(self, data, n_hidden, dim, K, train_ones, val_ones, val_zeros,
-                 test_ones, test_zeros):
+                 test_ones, test_zeros, lr):
         super(G2G, self).__init__()
 
         train_ones = train_ones.cpu().numpy().T
@@ -194,7 +194,7 @@ class G2G(nn.Module):
         X = sp.csr_matrix(data.x.cpu().numpy())
 
         g2g = Graph2Gauss(A, X, dim, train_ones, val_ones, val_zeros,
-                          test_ones, test_zeros, K, n_hidden=n_hidden)
+                          test_ones, test_zeros, K, n_hidden=n_hidden, lr=lr)
         session = g2g.train()
         mu, sigma = session.run([g2g.mu, g2g.sigma])
         all_embs = torch.tensor(mu, dtype=torch.float32)
