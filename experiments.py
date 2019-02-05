@@ -9,7 +9,7 @@ config = {'model_name': None,
           'device': device,
           'dataset': None,
           'hidden_dims': [256, 128],
-          'lr': 0.001,
+          'lr': 0.0001,
           'epochs': 200,
           'random_splits': True,
           'rec_weight': 0,
@@ -19,9 +19,8 @@ config = {'model_name': None,
 
 # Values to be changed in experiments
 param_grid = {'model_name': ['graph2gauss'],
-              'dataset': ('coauthorcs', 'coauthorphys', 'amazoncomp',
-                          'amazonphoto'),
-              'lr': [0.001, 0.0005, 0.0001]}
+              'dataset': ('cora', 'citeseer', 'pubmed'),
+              'train_examples_per_class': [1] + [i for i in range(2, 21, 2)]}
 
 grid = ParameterGrid(param_grid)
 
