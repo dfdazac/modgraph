@@ -7,6 +7,7 @@ rcParams['font.sans-serif'] = ['Helvetica Neue']
 import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.manifold import TSNE
+import torch
 
 from train import get_dataset, train_encoder
 
@@ -61,40 +62,38 @@ def get_label_rate_results(database, model_name, id_low, id_high, dataset):
     return np.array(train_examples), np.array(accuracies), np.array(stdevs)
 
 
-def plot_label_rate(id_low, id_high, dataset):
+def plot_label_rate(model2ids, dataset):
     database = get_database()
 
-    gae_results = get_label_rate_results(database, 'gae', id_low, id_high,
-                                         dataset)
-    dgi_results = get_label_rate_results(database, 'dgi', id_low, id_high,
-                                         dataset)
-
     plt.figure(figsize=(2.5, 2.5))
-    plt.plot(gae_results[0], gae_results[1], '.-', label='GAE', linewidth=1)
-    plt.fill_between(gae_results[0], gae_results[1] - gae_results[2],
-                     gae_results[1] + gae_results[2], alpha=0.25)
+    for model in model2ids:
+        id_low, id_high = model2ids[model]
+        results = get_label_rate_results(database, model.lower(),
+                                         id_low, id_high, dataset)
+        plt.plot(results[0], results[1], '.-', label=model,
+                 linewidth=0.75)
+        #plt.fill_between(results[0], results[1] - results[2],
+        #                 results[1] + results[2], alpha=0.25)
 
-    plt.plot(dgi_results[0], dgi_results[1], 'r.--', label='DGI', linewidth=1)
-    plt.fill_between(dgi_results[0], dgi_results[1] - dgi_results[2],
-                     dgi_results[1] + dgi_results[2], alpha=0.2)
-
-    xticks = [i for i in range(2, np.max(gae_results[0]) + 1, 4)]
+    xticks = [i for i in range(2, np.max(results[0]) + 1, 4)]
     plt.xticks(xticks, xticks)
     plt.legend(loc='lower right')
     plt.xlabel('Nodes per class')
     plt.ylabel('Accuracy')
     plt.title(dataset.capitalize())
     plt.tight_layout()
+    plt.ylim([0.4, 0.85])
     plt.show()
 
-#plot_label_rate(267, 332, 'cora')
-#plot_label_rate(267, 332, 'citeseer')
-#plot_label_rate(267, 332, 'pubmed')
+model2ids = {'GAE': [267, 332],
+             'DGI': [267, 332],
+             'graph2gauss': [357, 389]}
+plot_label_rate(model2ids, 'pubmed')
 
 
 def plot_embeddings(model_name, dataset_str):
-    _, encoder = train_encoder(model_name, 'cpu', dataset_str, [256, 128],
-                               lr=0.001, epochs=200, random_splits=False,
+    _, encoder = train_encoder(model_name, 'cuda', dataset_str, [256, 128],
+                               lr=0.001, epochs=2, random_splits=False,
                                rec_weight=0, encoder='gcn', seed=42,
                                train_examples_per_class=20,
                                val_examples_per_class=30)
@@ -102,17 +101,17 @@ def plot_embeddings(model_name, dataset_str):
     dataset = get_dataset(dataset_str, train_examples_per_class=20,
                           val_examples_per_class=30)
     data = dataset[0]
-
-    embeddings = encoder(data, data.edge_index).detach().numpy()
+    encoder.to(torch.device('cpu'))
+    embeddings = encoder(data, data.edge_index).numpy()
 
     z = TSNE(n_components=2).fit_transform(embeddings)
     labels = data.y.numpy()
     n_labels = np.unique(labels).size
     plt.scatter(z[:, 0], z[:, 1], c=data.y.numpy(),
                 cmap=plt.cm.get_cmap("jet", n_labels))
-    plt.show()
+    plt.savefig('sdf', format='pdf')
 
 
-plot_embeddings('gae', 'cora')
+#plot_embeddings('dgi', 'cora')
 
 
