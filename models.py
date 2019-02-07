@@ -133,7 +133,7 @@ class GAE(nn.Module):
 
         if self.rec_loss is not None:
             reconstructions = self.decoder(z)
-            cost += self.rec_weight * self.rec_loss(reconstructions, data.x)
+            cost = self.rec_weight * self.rec_loss(reconstructions, data.x) + (1 - self.rec_weight) * cost
 
         return cost
 
