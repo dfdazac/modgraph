@@ -9,18 +9,21 @@ config = {'model_name': None,
           'device': device,
           'dataset': None,
           'hidden_dims': [256, 128],
-          'lr': 0.0001,
+          'lr': 0.001,
           'epochs': 200,
           'random_splits': True,
-          'rec_weight': 0,
+          'rec_weight': None,
           'encoder': 'gcn',
           'train_examples_per_class': 20,
-          'val_examples_per_class': 30}
+          'val_examples_per_class': 30,
+          'n_exper': 20}
 
 # Values to be changed in experiments
-param_grid = {'model_name': ['graph2gauss'],
-              'dataset': ('cora', 'citeseer', 'pubmed'),
-              'train_examples_per_class': [1] + [i for i in range(2, 21, 2)]}
+param_grid = {'model_name': ['gae'],
+              'dataset': ('cora', 'citeseer', 'pubmed', 'corafull',
+                          'coauthorcs', 'coauthorphys', 'amazoncomp',
+                          'amazonphoto'),
+              'rec_weight': [0.1, 0.5, 0.9]}
 
 grid = ParameterGrid(param_grid)
 
