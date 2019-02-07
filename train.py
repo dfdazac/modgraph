@@ -227,9 +227,9 @@ else:
 
 @ex.config
 def config():
-    model_name = 'graph2gauss'
+    model_name = 'gae'
     device = 'cuda'
-    dataset = 'amazonphoto'
+    dataset = 'cora'
     hidden_dims = [256, 128]
     lr = 0.001
     epochs = 200
@@ -238,15 +238,16 @@ def config():
     encoder = 'gcn'
     train_examples_per_class = 20
     val_examples_per_class = 30
+    n_exper = 1
 
 
 @ex.automain
 def run_experiments(model_name, device, dataset, hidden_dims, lr, epochs,
                     random_splits, rec_weight, encoder,
-                    train_examples_per_class, val_examples_per_class, _run):
+                    train_examples_per_class, val_examples_per_class, n_exper,
+                    _run):
     torch.random.manual_seed(42)
     np.random.seed(42)
-    n_exper = 20
     results = np.empty([n_exper, 3])
 
     for i in range(n_exper):
