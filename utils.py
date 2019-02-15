@@ -3,40 +3,49 @@ import scipy.sparse as sp
 import torch
 
 
-def sample_zero_entries(edge_index, n_samples):
+def sample_zero_entries(edge_index, seed):
     """Obtain zero entries from a sparse matrix.
     Args:
         - edge_index: tensor, (2, N), N is the number of edges.
         - n_samples: int, number of samples to obtain
+    Return:
+        - torch.tensor, (2, N) containing zero entries
     """
-    adj = adj_from_edge_index(edge_index)
+    np.random.seed(seed)
+    # Number of edges in both directions must be even
+    n_samples = int(np.ceil(edge_index.shape[1]/2) * 2)
+    adjacency = adj_from_edge_index(edge_index)
     zero_entries = np.empty([2, n_samples], dtype=np.int32)
-    nonzero_or_sampled = set(zip(*adj.nonzero()))
+    nonzero_or_sampled = set(zip(*adjacency.nonzero()))
     i = 0
     while True:
-        t = tuple(np.random.randint(0, adj.shape[0], 2))
+        t = tuple(np.random.randint(0, adjacency.shape[0], 2))
         # Don't sample diagonal of the adjacency matrix
         if t[0] == t[1]:
             continue
         if t not in nonzero_or_sampled:
+            # Add edge in both directions
+            t_rev = (t[1], t[0])
             zero_entries[:, i] = t
+            zero_entries[:, i+1] = t_rev
             i += 1
-            if i == n_samples - 1:
+            if i >= n_samples - 1:
                 break
 
-            # Add edge in both directions
             nonzero_or_sampled.add(t)
-            nonzero_or_sampled.add((t[1], t[0]))
-    
+            nonzero_or_sampled.add(t_rev)
+
     return torch.tensor(zero_entries, dtype=torch.long)
 
 
-def split_edges(edge_index, seed):
+def split_edges(edge_index, seed, add_self_connections=False):
     """Obtain positive and negative train/val/test edges for an *undirected*
     graph given m an edge index (as the one used in the
     torch_geometric.datasets.Planetoid class).
     Args:
         - edge_index: tensor, (2, N), N is the number of edges.
+        - seed: int, use to control randomness
+        - add_self_connections: bool
     """
     np.random.seed(seed)
 
@@ -44,6 +53,8 @@ def split_edges(edge_index, seed):
     # Remove diagonal elements
     adj = adj - sp.dia_matrix((adj.diagonal()[np.newaxis, :], [0]),
                                shape=adj.shape)
+    if add_self_connections:
+        adj = adj + sp.identity(adj.shape[0])
 
     adj.eliminate_zeros()
 
@@ -60,26 +71,15 @@ def split_edges(edge_index, seed):
     test_edge_idx = all_edge_idx[num_val:(num_val + num_test)]
     test_edges = edges[test_edge_idx]
     val_edges = edges[val_edge_idx]
-    train_edges = edges #np.delete(edges, np.hstack([test_edge_idx, val_edge_idx]),
-                         #   axis=0)
+    train_edges = np.delete(edges, np.hstack([test_edge_idx, val_edge_idx]),
+                            axis=0)
 
-    # Sample zero entries without replacement
-    zero_iterator = sample_zero_entries(adj)
+    splits = []
+    for edges in [train_edges, val_edges, test_edges]:
+        all_edges = add_reverse_edges(torch.tensor(edges.T, dtype=torch.long))
+        splits.append(all_edges)
 
-    # NOTE: these edge lists only contain single direction of edge!
-    positive_splits = [torch.tensor(train_edges.T, dtype=torch.long),
-                       torch.tensor(val_edges.T, dtype=torch.long),
-                       torch.tensor(test_edges.T, dtype=torch.long)]
-    negative_splits = []
-
-    for i in range(len(positive_splits)):
-        negative_edges = np.empty(positive_splits[i].shape, dtype=np.int32)
-        for j in range(negative_edges.shape[1]):
-            negative_edges[:, j] = next(zero_iterator)
-
-        negative_splits.append(torch.tensor(negative_edges, dtype=torch.long))
-
-    return positive_splits, negative_splits
+    return splits
 
 
 def add_reverse_edges(edges):

@@ -11,9 +11,10 @@ from sklearn.metrics import roc_auc_score, average_precision_score
 from sacred import Experiment
 from sacred.observers import MongoObserver
 
-from utils import split_edges, add_reverse_edges, shuffle_graph_labels
-from models import MLPEncoder, GraphEncoder, GAE, DGI, Node2Vec,\
-    NodeClassifier, G2G
+from utils import (sample_zero_entries, split_edges, add_reverse_edges,
+                   shuffle_graph_labels)
+from models import (MLPEncoder, GraphEncoder, GAE, DGI, Node2Vec,
+                    NodeClassifier, G2G)
 
 def get_dataset(dataset_str, train_examples_per_class, val_examples_per_class):
     path = osp.join(osp.dirname(osp.realpath(__file__)), 'data', dataset_str)
@@ -56,40 +57,29 @@ def eval_link_prediction(emb, edges_pos, edges_neg):
     return auc_score, ap_score
 
 
-def train_encoder(model_name, device, dataset_str, hidden_dims, lr, epochs,
-                  random_splits, rec_weight, encoder, seed,
-                  train_examples_per_class, val_examples_per_class):
+def train_unsupervised(data, method, encoder, dimensions, lr, epochs,
+                       rec_weight, device, seed, link_prediction):
     now = datetime.now().strftime('%Y-%m-%d-%H%M%S')
 
-    if not torch.cuda.is_available() and device.startswith('cuda'):
-        raise ValueError(f'Device {device} specified '
-                         'but CUDA is not available')
+    neg_edge_index = sample_zero_entries(data.edge_index, seed)
 
-    device = torch.device(device)
+    if link_prediction:
+        train_pos, val_pos, test_pos = split_edges(data.edge_index, seed)
+        train_neg, val_neg, test_neg = split_edges(neg_edge_index, seed)
+    else:
+        train_pos = data.edge_index.to(device)
+        train_neg = neg_edge_index.to(device)
 
-    # Load data
-    dataset = get_dataset(dataset_str, train_examples_per_class,
-                          val_examples_per_class)
-    data = dataset[0]
-
-    add_self_connections = model_name == 'node2vec'
-    positive_splits, negative_splits = split_edges(data.edge_index, seed,
-                                                   add_self_connections)
-    train_pos, val_pos, test_pos = positive_splits
-    train_neg, val_neg, test_neg = negative_splits
-    # Add edges in reverse direction for encoding
-    train_pos = add_reverse_edges(train_pos).to(device)
-    train_neg = add_reverse_edges(train_neg).to(device)
-
+    # TODO: Continue from here
     # Create model
-    if model_name == 'dgi':
+    if method == 'dgi':
         model_class = DGI
-    elif model_name == 'gae':
+    elif method == 'gae':
         model_class = GAE
-    elif model_name in ['node2vec', 'graph2gauss']:
+    elif method in ['node2vec', 'graph2gauss']:
         pass
     else:
-        raise ValueError(f'Unknown model {model_name}')
+        raise ValueError(f'Unknown model {method}')
 
     if encoder == 'mlp':
         encoder_class = MLPEncoder
@@ -98,16 +88,16 @@ def train_encoder(model_name, device, dataset_str, hidden_dims, lr, epochs,
     else:
         raise ValueError(f'Unknown encoder {encoder}')
 
-    if model_name in ['gae', 'dgi']:
+    if method in ['gae', 'dgi']:
         # During unsupervised learning we only need features on device
         data.x = data.x.to(device)
 
-        model = model_class(dataset.num_features, hidden_dims, encoder_class,
+        model = model_class(dataset.num_features, dimensions, encoder_class,
                             rec_weight).to(device)
 
         # Train model
         ckpt_name = '.ckpt'
-        print(f'Training {model_name}')
+        print(f'Training {method}')
         optimizer = torch.optim.Adam(model.parameters(), lr=lr)
         best_auc = 0
         for epoch in range(1, epochs + 1):
@@ -135,18 +125,18 @@ def train_encoder(model_name, device, dataset_str, hidden_dims, lr, epochs,
 
         # Evaluate on test edges
         model.load_state_dict(torch.load(osp.join(ckpt_name)))
-    elif model_name == 'node2vec':
+    elif method == 'node2vec':
         path = osp.join(osp.dirname(osp.realpath(__file__)), 'node2vec',
                         dataset_str)
         model = Node2Vec(train_pos, path, data.num_nodes)
-    elif model_name == 'graph2gauss':
+    elif method == 'graph2gauss':
 
-        model = G2G(data, hidden_dims[:-1], hidden_dims[-1], 1, train_pos,
+        model = G2G(data, dimensions[:-1], dimensions[-1], 1, train_pos,
                     val_pos, val_neg, test_pos, test_neg, lr)
     else:
         raise ValueError
 
-    if model_name == 'graph2gauss':
+    if method == 'graph2gauss':
         # graph2gauss link prediction is already evaluated with the KL div
         auc, ap = model.test_auc, model.test_ap
     else:
@@ -156,9 +146,9 @@ def train_encoder(model_name, device, dataset_str, hidden_dims, lr, epochs,
 
     print('\ntest_auc: {:6f}, test_ap: {:6f}'.format(auc, ap))
 
-    # Evaluate embeddings in node classification
-    data.edge_index = train_pos
-    del train_pos, train_neg
+    return np.array([auc, ap]), model.encoder
+
+def train_node_classification(data, model, train_examples_per_class, val_examples_per_class, epochs, seed, random_splits, device):
     classifier = NodeClassifier(model.encoder,
                                 hidden_dims[-1],
                                 dataset.num_classes).to(device)
@@ -210,7 +200,7 @@ def train_encoder(model_name, device, dataset_str, hidden_dims, lr, epochs,
     print(log.format(*best_accs))
     test_acc = best_accs[2]
 
-    return np.array([auc, ap, test_acc]), model.encoder
+    return test_acc
 
 
 ex = Experiment()
@@ -227,18 +217,18 @@ else:
 
 @ex.config
 def config():
-    model_name = 'gae'
+    model_name = 'graph2gauss'
     device = 'cuda'
     dataset = 'cora'
     hidden_dims = [256, 128]
-    lr = 0.001
+    lr = 0.0001
     epochs = 200
     random_splits = True
     rec_weight = 0
     encoder = 'gcn'
     train_examples_per_class = 20
     val_examples_per_class = 30
-    n_exper = 1
+    n_exper = 20
 
 
 @ex.automain
