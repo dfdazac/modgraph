@@ -3,22 +3,35 @@ import scipy.sparse as sp
 import torch
 
 
-def sample_zero_entries(mat):
-    """A generator to obtain zero entries from a sparse matrix"""
-    nonzero_or_sampled = set(zip(*mat.nonzero()))
+def sample_zero_entries(edge_index, n_samples):
+    """Obtain zero entries from a sparse matrix.
+    Args:
+        - edge_index: tensor, (2, N), N is the number of edges.
+        - n_samples: int, number of samples to obtain
+    """
+    adj = adj_from_edge_index(edge_index)
+    zero_entries = np.empty([2, n_samples], dtype=np.int32)
+    nonzero_or_sampled = set(zip(*adj.nonzero()))
+    i = 0
     while True:
-        t = tuple(np.random.randint(0, mat.shape[0], 2))
+        t = tuple(np.random.randint(0, adj.shape[0], 2))
         # Don't sample diagonal of the adjacency matrix
         if t[0] == t[1]:
             continue
         if t not in nonzero_or_sampled:
-            yield t
+            zero_entries[:, i] = t
+            i += 1
+            if i == n_samples - 1:
+                break
+
             # Add edge in both directions
             nonzero_or_sampled.add(t)
             nonzero_or_sampled.add((t[1], t[0]))
+    
+    return torch.tensor(zero_entries, dtype=torch.long)
 
 
-def split_edges(edge_index, seed, add_self_connections=False):
+def split_edges(edge_index, seed):
     """Obtain positive and negative train/val/test edges for an *undirected*
     graph given m an edge index (as the one used in the
     torch_geometric.datasets.Planetoid class).
@@ -31,8 +44,6 @@ def split_edges(edge_index, seed, add_self_connections=False):
     # Remove diagonal elements
     adj = adj - sp.dia_matrix((adj.diagonal()[np.newaxis, :], [0]),
                                shape=adj.shape)
-    if add_self_connections:
-        adj = adj + sp.identity(adj.shape[0])
 
     adj.eliminate_zeros()
 
@@ -49,8 +60,8 @@ def split_edges(edge_index, seed, add_self_connections=False):
     test_edge_idx = all_edge_idx[num_val:(num_val + num_test)]
     test_edges = edges[test_edge_idx]
     val_edges = edges[val_edge_idx]
-    train_edges = np.delete(edges, np.hstack([test_edge_idx, val_edge_idx]),
-                            axis=0)
+    train_edges = edges #np.delete(edges, np.hstack([test_edge_idx, val_edge_idx]),
+                         #   axis=0)
 
     # Sample zero entries without replacement
     zero_iterator = sample_zero_entries(adj)
