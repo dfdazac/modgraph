@@ -194,7 +194,7 @@ class G2G(nn.Module):
             val_zeros = val_zeros.cpu().numpy().T
             test_ones = test_ones.cpu().numpy().T
             test_zeros = test_zeros.cpu().numpy().T
-            
+
             g2g = Graph2Gauss(A, X, dim, train_ones, val_ones, val_zeros,
                               test_ones, test_zeros, K, n_hidden=n_hidden,
                               lr=lr)

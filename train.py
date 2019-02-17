@@ -56,10 +56,8 @@ def eval_link_prediction(emb, edges_pos, edges_neg):
     return auc_score, ap_score
 
 
-def train_unsupervised(data, method, encoder, dimensions, lr, epochs,
-                       rec_weight, device, seed, link_prediction):
-    now = datetime.now().strftime('%Y-%m-%d-%H%M%S')
-
+def train_encoder(data, method, encoder, dimensions, lr, epochs, rec_weight,
+                  device, seed, link_prediction=False):
     if not torch.cuda.is_available() and device.startswith('cuda'):
         raise ValueError(f'Device {device} specified '
                          'but CUDA is not available')
@@ -69,7 +67,6 @@ def train_unsupervised(data, method, encoder, dimensions, lr, epochs,
     neg_edge_index = sample_zero_entries(data.edge_index, seed)
 
     if link_prediction:
-        # TODO: Continue here
         add_self_connections = method == 'node2vec'
         train_pos, val_pos, test_pos = split_edges(data.edge_index, seed,
                                                    add_self_connections)
@@ -150,7 +147,7 @@ def train_unsupervised(data, method, encoder, dimensions, lr, epochs,
         model = Node2Vec(train_pos, path, data.num_nodes)
     elif method == 'graph2gauss':
         model = G2G(data, dimensions[:-1], dimensions[-1], 1, train_pos,
-                    val_pos, val_neg, test_pos, test_neg, lr)
+                    val_pos, val_neg, test_pos, test_neg, lr, link_prediction)
     else:
         raise ValueError
 
@@ -169,11 +166,13 @@ def train_unsupervised(data, method, encoder, dimensions, lr, epochs,
 
     return np.array([auc, ap]), model.encoder
 
-# FIXME: Finish function
-def train_node_classification(data, model, train_examples_per_class, val_examples_per_class, epochs, seed, random_splits, device):
-    classifier = NodeClassifier(model.encoder,
-                                hidden_dims[-1],
-                                dataset.num_classes).to(device)
+
+def train_node_classification(data, num_classes, encoder, emb_dim,
+                              train_examples_per_class, val_examples_per_class,
+                              epochs, seed, random_splits, device):
+    classifier = NodeClassifier(encoder,
+                                emb_dim,
+                                num_classes).to(device)
 
     classifier_optimizer = torch.optim.Adam(classifier.parameters(), lr=0.01)
 
@@ -239,7 +238,7 @@ else:
 
 @ex.config
 def config():
-    model_name = 'node2vec'
+    model_name = 'graph2gauss'
     device = 'cuda'
     dataset = 'cora'
     hidden_dims = [256, 128]
@@ -253,7 +252,6 @@ def config():
     n_exper = 20
 
 
-@ex.automain
 def link_pred_experiments(model_name, device, dataset, hidden_dims, lr, epochs,
                           random_splits, rec_weight, encoder,
                           train_examples_per_class, val_examples_per_class,
@@ -263,8 +261,28 @@ def link_pred_experiments(model_name, device, dataset, hidden_dims, lr, epochs,
                           val_examples_per_class)
     data = dataset[0]
 
-    train_unsupervised(data, model_name, encoder, hidden_dims, lr, epochs,
-                       rec_weight, device, seed=0, link_prediction=False)
+    scores, encoder = train_encoder(data, model_name, encoder, hidden_dims, lr,
+                                    epochs, rec_weight, device, seed=0,
+                                    link_prediction=True)
+
+
+@ex.automain
+def node_classification_experiments(model_name, device, dataset, hidden_dims, lr, epochs,
+                          random_splits, rec_weight, encoder,
+                          train_examples_per_class, val_examples_per_class,
+                          n_exper, _run):
+    # Load data
+    dataset = get_dataset(dataset, train_examples_per_class,
+                          val_examples_per_class)
+    data = dataset[0]
+
+    scores, encoder = train_encoder(data, model_name, encoder, hidden_dims, lr,
+                                    epochs, rec_weight, device, seed=0)
+
+    train_node_classification(data, dataset.num_classes, encoder,
+                              hidden_dims[-1], train_examples_per_class,
+                              val_examples_per_class, epochs, seed=0,
+                              random_splits=random_splits, device=device)
 
 
 def run_experiments(model_name, device, dataset, hidden_dims, lr, epochs,
