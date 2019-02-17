@@ -218,7 +218,6 @@ class G2G(nn.Module):
         self.test_auc, self.test_ap = test_auc, test_ap
 
 
-
 class NodeClassifier(nn.Module):
     def __init__(self, encoder, hidden_dim, num_classes):
         super(NodeClassifier, self).__init__()

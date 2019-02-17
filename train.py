@@ -164,7 +164,7 @@ def train_encoder(data, method, encoder, dimensions, lr, epochs, rec_weight,
     else:
         auc, ap = None, None
 
-    return np.array([auc, ap]), model.encoder
+    return model.encoder, np.array([auc, ap])
 
 
 def train_node_classification(data, num_classes, encoder, emb_dim,
@@ -261,7 +261,7 @@ def link_pred_experiments(model_name, device, dataset, hidden_dims, lr, epochs,
                           val_examples_per_class)
     data = dataset[0]
 
-    scores, encoder = train_encoder(data, model_name, encoder, hidden_dims, lr,
+    encoder, scores = train_encoder(data, model_name, encoder, hidden_dims, lr,
                                     epochs, rec_weight, device, seed=0,
                                     link_prediction=True)
 
@@ -276,7 +276,7 @@ def node_classification_experiments(model_name, device, dataset, hidden_dims, lr
                           val_examples_per_class)
     data = dataset[0]
 
-    scores, encoder = train_encoder(data, model_name, encoder, hidden_dims, lr,
+    encoder, scores = train_encoder(data, model_name, encoder, hidden_dims, lr,
                                     epochs, rec_weight, device, seed=0)
 
     train_node_classification(data, dataset.num_classes, encoder,
