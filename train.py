@@ -11,8 +11,7 @@ from sklearn.metrics import roc_auc_score, average_precision_score
 from sacred import Experiment
 from sacred.observers import MongoObserver
 
-from utils import (sample_zero_entries, split_edges, add_reverse_edges,
-                   shuffle_graph_labels)
+from utils import sample_zero_entries, split_edges, shuffle_graph_labels
 from models import (MLPEncoder, GraphEncoder, GAE, DGI, Node2Vec,
                     NodeClassifier, G2G)
 
@@ -61,23 +60,31 @@ def train_unsupervised(data, method, encoder, dimensions, lr, epochs,
                        rec_weight, device, seed, link_prediction):
     now = datetime.now().strftime('%Y-%m-%d-%H%M%S')
 
+    if not torch.cuda.is_available() and device.startswith('cuda'):
+        raise ValueError(f'Device {device} specified '
+                         'but CUDA is not available')
+
+    device = torch.device(device)
+
     neg_edge_index = sample_zero_entries(data.edge_index, seed)
 
     if link_prediction:
-        train_pos, val_pos, test_pos = split_edges(data.edge_index, seed)
+        # TODO: Continue here
+        add_self_connections = method == 'node2vec'
+        train_pos, val_pos, test_pos = split_edges(data.edge_index, seed,
+                                                   add_self_connections)
         train_neg, val_neg, test_neg = split_edges(neg_edge_index, seed)
     else:
-        train_pos = data.edge_index.to(device)
-        train_neg = neg_edge_index.to(device)
+        train_pos, val_pos, test_pos = data.edge_index, None, None
+        train_neg, val_neg, test_neg = neg_edge_index, None, None
 
-    # TODO: Continue from here
     # Create model
     if method == 'dgi':
         model_class = DGI
     elif method == 'gae':
         model_class = GAE
     elif method in ['node2vec', 'graph2gauss']:
-        pass
+        model_class = None
     else:
         raise ValueError(f'Unknown model {method}')
 
@@ -89,10 +96,12 @@ def train_unsupervised(data, method, encoder, dimensions, lr, epochs,
         raise ValueError(f'Unknown encoder {encoder}')
 
     if method in ['gae', 'dgi']:
-        # During unsupervised learning we only need features on device
         data.x = data.x.to(device)
+        train_pos = train_pos.to(device)
+        train_neg = train_neg.to(device)
 
-        model = model_class(dataset.num_features, dimensions, encoder_class,
+        num_features = data.x.shape[1]
+        model = model_class(num_features, dimensions, encoder_class,
                             rec_weight).to(device)
 
         # Train model
@@ -107,47 +116,60 @@ def train_unsupervised(data, method, encoder, dimensions, lr, epochs,
             loss.backward()
             optimizer.step()
 
-            # Evaluate on val edges
-            embeddings = model.encoder(data, train_pos).cpu().detach()
-            auc, ap = eval_link_prediction(embeddings, val_pos, val_neg)
-            if epoch % 50 == 0:
-                print('\r[{:03d}/{:03d}] train loss: {:.6f}, '
-                      'val_auc: {:6f}, val_ap: {:6f}'.format(epoch,
-                                                              epochs,
-                                                              loss.item(),
-                                                              auc, ap),
-                      end='', flush=True)
+            if link_prediction:
+                # Evaluate on val edges
+                embeddings = model.encoder(data, train_pos).cpu().detach()
+                auc, ap = eval_link_prediction(embeddings, val_pos, val_neg)
 
-            if auc > best_auc:
-                # Keep best model on val set
-                best_auc = auc
-                torch.save(model.state_dict(), ckpt_name)
+                if auc > best_auc:
+                    # Keep best model on val set
+                    best_auc = auc
+                    torch.save(model.state_dict(), ckpt_name)
+
+                if epoch % 50 == 0:
+                    log = ('\r[{:03d}/{:03d}] train loss: {:.6f}, '
+                           'val_auc: {:6f}, val_ap: {:6f}')
+                    print(log.format(epoch, epochs, loss.item(), auc, ap),
+                          end='', flush=True)
+
+            elif epoch % 50 == 0:
+                log = '\r[{:03d}/{:03d}] train loss: {:.6f}'
+                print(log.format(epoch, epochs, loss.item()), end='',
+                      flush=True)
+        print()
+
+        if not link_prediction:
+            # Save the last state
+            torch.save(model.state_dict(), ckpt_name)
 
         # Evaluate on test edges
         model.load_state_dict(torch.load(osp.join(ckpt_name)))
     elif method == 'node2vec':
         path = osp.join(osp.dirname(osp.realpath(__file__)), 'node2vec',
-                        dataset_str)
+                        'data')
         model = Node2Vec(train_pos, path, data.num_nodes)
     elif method == 'graph2gauss':
-
         model = G2G(data, dimensions[:-1], dimensions[-1], 1, train_pos,
                     val_pos, val_neg, test_pos, test_neg, lr)
     else:
         raise ValueError
 
-    if method == 'graph2gauss':
-        # graph2gauss link prediction is already evaluated with the KL div
-        auc, ap = model.test_auc, model.test_ap
-    else:
-        model.eval()
-        embeddings = model.encoder(data, train_pos).cpu().detach()
-        auc, ap = eval_link_prediction(embeddings, test_pos, test_neg)
+    if link_prediction:
+        if method == 'graph2gauss':
+            # graph2gauss link prediction is already evaluated with the KL div
+            auc, ap = model.test_auc, model.test_ap
+        else:
+            model.eval()
+            embeddings = model.encoder(data, train_pos).cpu().detach()
+            auc, ap = eval_link_prediction(embeddings, test_pos, test_neg)
 
-    print('\ntest_auc: {:6f}, test_ap: {:6f}'.format(auc, ap))
+        print('test_auc: {:6f}, test_ap: {:6f}'.format(auc, ap))
+    else:
+        auc, ap = None, None
 
     return np.array([auc, ap]), model.encoder
 
+# FIXME: Finish function
 def train_node_classification(data, model, train_examples_per_class, val_examples_per_class, epochs, seed, random_splits, device):
     classifier = NodeClassifier(model.encoder,
                                 hidden_dims[-1],
@@ -217,7 +239,7 @@ else:
 
 @ex.config
 def config():
-    model_name = 'graph2gauss'
+    model_name = 'node2vec'
     device = 'cuda'
     dataset = 'cora'
     hidden_dims = [256, 128]
@@ -232,6 +254,19 @@ def config():
 
 
 @ex.automain
+def link_pred_experiments(model_name, device, dataset, hidden_dims, lr, epochs,
+                          random_splits, rec_weight, encoder,
+                          train_examples_per_class, val_examples_per_class,
+                          n_exper, _run):
+    # Load data
+    dataset = get_dataset(dataset, train_examples_per_class,
+                          val_examples_per_class)
+    data = dataset[0]
+
+    train_unsupervised(data, model_name, encoder, hidden_dims, lr, epochs,
+                       rec_weight, device, seed=0, link_prediction=False)
+
+
 def run_experiments(model_name, device, dataset, hidden_dims, lr, epochs,
                     random_splits, rec_weight, encoder,
                     train_examples_per_class, val_examples_per_class, n_exper,
@@ -243,10 +278,10 @@ def run_experiments(model_name, device, dataset, hidden_dims, lr, epochs,
     for i in range(n_exper):
         print('\nTrial {:d}/{:d}'.format(i + 1, n_exper))
         seed = i
-        results[i], _ = train_encoder(model_name, device, dataset, hidden_dims,
-                                      lr, epochs, random_splits, rec_weight,
-                                      encoder, seed, train_examples_per_class,
-                                      val_examples_per_class)
+        results[i], _ = 0, 0#train_encoder(model_name, device, dataset, hidden_dims,
+                         #             lr, epochs, random_splits, rec_weight,
+                         #             encoder, seed, train_examples_per_class,
+                         #             val_examples_per_class)
 
     mean = np.mean(results, axis=0)
     std = np.std(results, axis=0)

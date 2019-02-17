@@ -12,10 +12,10 @@ def sample_zero_entries(edge_index, seed):
         - torch.tensor, (2, N) containing zero entries
     """
     np.random.seed(seed)
-    # Number of edges in both directions must be even
+    # Number of edges in both directions must be eve
     n_samples = int(np.ceil(edge_index.shape[1]/2) * 2)
     adjacency = adj_from_edge_index(edge_index)
-    zero_entries = np.empty([2, n_samples], dtype=np.int32)
+    zero_entries = np.zeros([2, n_samples], dtype=np.int32)
     nonzero_or_sampled = set(zip(*adjacency.nonzero()))
     i = 0
     while True:
@@ -28,7 +28,7 @@ def sample_zero_entries(edge_index, seed):
             t_rev = (t[1], t[0])
             zero_entries[:, i] = t
             zero_entries[:, i+1] = t_rev
-            i += 1
+            i += 2
             if i >= n_samples - 1:
                 break
 
