@@ -181,28 +181,41 @@ class Node2Vec(nn.Module):
 
 class G2G(nn.Module):
     def __init__(self, data, n_hidden, dim, K, train_ones, val_ones, val_zeros,
-                 test_ones, test_zeros, lr):
+                 test_ones, test_zeros, lr, link_prediction):
         super(G2G, self).__init__()
 
         train_ones = train_ones.cpu().numpy().T
-        val_ones = val_ones.cpu().numpy().T
-        val_zeros = val_zeros.cpu().numpy().T
-        test_ones = test_ones.cpu().numpy().T
-        test_zeros = test_zeros.cpu().numpy().T
 
         A = adj_from_edge_index(data.edge_index)
         X = sp.csr_matrix(data.x.cpu().numpy())
 
-        g2g = Graph2Gauss(A, X, dim, train_ones, val_ones, val_zeros,
-                          test_ones, test_zeros, K, n_hidden=n_hidden, lr=lr)
+        if link_prediction:
+            val_ones = val_ones.cpu().numpy().T
+            val_zeros = val_zeros.cpu().numpy().T
+            test_ones = test_ones.cpu().numpy().T
+            test_zeros = test_zeros.cpu().numpy().T
+            
+            g2g = Graph2Gauss(A, X, dim, train_ones, val_ones, val_zeros,
+                              test_ones, test_zeros, K, n_hidden=n_hidden,
+                              lr=lr)
+        else:
+            g2g = Graph2Gauss(A, X, dim, train_ones, val_ones=None,
+                              val_zeros=None, test_ones=None, test_zeros=None,
+                              K=K, p_val=0, p_test=0, n_hidden=n_hidden, lr=lr)
+
         session = g2g.train()
         mu, sigma = session.run([g2g.mu, g2g.sigma])
         all_embs = torch.tensor(mu, dtype=torch.float32)
         self.encoder = LookupEncoder(all_embs)
 
-        test_scores = session.run(g2g.neg_test_energy, g2g.feed_dict)
-        self.test_auc, self.test_ap = score_link_prediction(g2g.test_ground_truth,
-                                                            test_scores)
+        if link_prediction:
+            test_scores = session.run(g2g.neg_test_energy, g2g.feed_dict)
+            test_auc, test_ap = score_link_prediction(g2g.test_ground_truth,
+                                                                test_scores)
+        else:
+            test_auc, test_ap = None, None
+
+        self.test_auc, self.test_ap = test_auc, test_ap
 
 
 
