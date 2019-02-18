@@ -12,7 +12,7 @@ def sample_zero_entries(edge_index, seed):
         - torch.tensor, (2, N) containing zero entries
     """
     np.random.seed(seed)
-    # Number of edges in both directions must be eve
+    # Number of edges in both directions must be even
     n_samples = int(np.ceil(edge_index.shape[1]/2) * 2)
     adjacency = adj_from_edge_index(edge_index)
     zero_entries = np.zeros([2, n_samples], dtype=np.int32)
@@ -40,8 +40,7 @@ def sample_zero_entries(edge_index, seed):
 
 def split_edges(edge_index, seed, add_self_connections=False):
     """Obtain positive and negative train/val/test edges for an *undirected*
-    graph given m an edge index (as the one used in the
-    torch_geometric.datasets.Planetoid class).
+    graph given m an edge index.
     Args:
         - edge_index: tensor, (2, N), N is the number of edges.
         - seed: int, use to control randomness

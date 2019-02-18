@@ -1,9 +1,7 @@
-from datetime import datetime
 import os.path as osp
 import os
 
 import torch
-import torch.nn.functional as F
 import numpy as np
 from torch_geometric.datasets import Planetoid
 from gnnbench import GNNBenchmark
@@ -11,9 +9,9 @@ from sklearn.metrics import roc_auc_score, average_precision_score
 from sacred import Experiment
 from sacred.observers import MongoObserver
 
-from utils import sample_zero_entries, split_edges, shuffle_graph_labels
-from models import (MLPEncoder, GraphEncoder, GAE, DGI, Node2Vec,
-                    NodeClassifier, G2G)
+from utils import sample_zero_entries, split_edges
+from models import MLPEncoder, GraphEncoder, GAE, DGI, Node2Vec, G2G
+from g2g.utils import score_node_classification
 
 def get_dataset(dataset_str, train_examples_per_class, val_examples_per_class):
     path = osp.join(osp.dirname(osp.realpath(__file__)), 'data', dataset_str)
@@ -167,63 +165,6 @@ def train_encoder(data, method, encoder, dimensions, lr, epochs, rec_weight,
     return model.encoder, np.array([auc, ap])
 
 
-def train_node_classification(data, num_classes, encoder, emb_dim,
-                              train_examples_per_class, val_examples_per_class,
-                              epochs, seed, random_splits, device):
-    classifier = NodeClassifier(encoder,
-                                emb_dim,
-                                num_classes).to(device)
-
-    classifier_optimizer = torch.optim.Adam(classifier.parameters(), lr=0.01)
-
-    if random_splits:
-        data = shuffle_graph_labels(data, train_examples_per_class,
-                                    val_examples_per_class, seed)
-
-    # For supervised learning we need features and labels on device
-    data = data.to(device)
-
-    def train_classifier():
-        classifier.train()
-        classifier_optimizer.zero_grad()
-        output = classifier(data)
-        loss = F.nll_loss(output[data.train_mask], data.y[data.train_mask])
-        loss.backward()
-        classifier_optimizer.step()
-        return loss.item()
-
-    def test_classifier():
-        classifier.eval()
-        logits = classifier(data)
-        accs = []
-        for _, mask in data('train_mask', 'val_mask', 'test_mask'):
-            pred = logits[mask].max(1)[1]
-            acc = pred.eq(data.y[mask]).sum().item() / mask.sum().item()
-            accs.append(acc)
-        return accs
-
-    print('Training node classifier')
-    best_accs = []
-    best_val_acc = 0
-    for epoch in range(1, epochs + 1):
-        train_classifier()
-        accs = test_classifier()
-        if epoch % 50 == 0:
-            log = '\r[{:03d}/{:03d}] train: {:.4f}, val: {:.4f}, test: {:.4f}'
-            print(log.format(epoch, epochs, *accs), end='', flush=True)
-
-        val_acc = accs[1]
-        if val_acc > best_val_acc:
-            best_val_acc = val_acc
-            best_accs = accs
-
-    log = '\nBest validation results\nTrain: {:.4f}, Val: {:.4f}, Test: {:.4f}'
-    print(log.format(*best_accs))
-    test_acc = best_accs[2]
-
-    return test_acc
-
-
 ex = Experiment()
 # Set up database logs
 user = os.environ.get('MLAB_USR')
@@ -238,7 +179,7 @@ else:
 
 @ex.config
 def config():
-    model_name = 'graph2gauss'
+    model_name = 'gae'
     device = 'cuda'
     dataset = 'cora'
     hidden_dims = [256, 128]
@@ -279,37 +220,10 @@ def node_classification_experiments(model_name, device, dataset, hidden_dims, lr
     encoder, scores = train_encoder(data, model_name, encoder, hidden_dims, lr,
                                     epochs, rec_weight, device, seed=0)
 
-    train_node_classification(data, dataset.num_classes, encoder,
-                              hidden_dims[-1], train_examples_per_class,
-                              val_examples_per_class, epochs, seed=0,
-                              random_splits=random_splits, device=device)
-
-
-def run_experiments(model_name, device, dataset, hidden_dims, lr, epochs,
-                    random_splits, rec_weight, encoder,
-                    train_examples_per_class, val_examples_per_class, n_exper,
-                    _run):
-    torch.random.manual_seed(42)
-    np.random.seed(42)
-    results = np.empty([n_exper, 3])
-
-    for i in range(n_exper):
-        print('\nTrial {:d}/{:d}'.format(i + 1, n_exper))
-        seed = i
-        results[i], _ = 0, 0#train_encoder(model_name, device, dataset, hidden_dims,
-                         #             lr, epochs, random_splits, rec_weight,
-                         #             encoder, seed, train_examples_per_class,
-                         #             val_examples_per_class)
-
-    mean = np.mean(results, axis=0)
-    std = np.std(results, axis=0)
-
-    print('-'*50)
-    print('Final results')
-    metrics = ['AUC', 'AP', 'ACC']
-    for i in range(3):
-        print('{}: {:.1f} ± {:.2f}'.format(metrics[i],
-                                           mean[i] * 100,
-                                           std[i] * 100))
-        _run.log_scalar(f'{metrics[i]} mean', mean[i])
-        _run.log_scalar(f'{metrics[i]} std', std[i])
+    device = torch.device('cpu')
+    data.to(device)
+    encoder.to(device)
+    features = encoder(data, data.edge_index, corrupt=False).detach().numpy()
+    labels = data.y.cpu().numpy()
+    scores = score_node_classification(features, labels, n_repeat=1)
+    print(scores)
