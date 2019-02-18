@@ -5,7 +5,8 @@ import itertools
 
 from sklearn.model_selection import StratifiedShuffleSplit
 from sklearn.linear_model import LogisticRegressionCV
-from sklearn.metrics import roc_auc_score, average_precision_score, f1_score
+from sklearn.metrics import (roc_auc_score, average_precision_score, f1_score,
+                             accuracy_score)
 from sklearn.preprocessing import normalize
 
 
@@ -312,7 +313,7 @@ def score_node_classification(features, z, p_labeled=0.1, n_repeat=10, norm=Fals
     f1_micro : float
         F_1 Score (macro) averaged of n_repeat trials.
     """
-    lrcv = LogisticRegressionCV()
+    lrcv = LogisticRegressionCV(cv=3, multi_class='multinomial', n_jobs=-1)
 
     if norm:
         features = normalize(features)
@@ -327,8 +328,9 @@ def score_node_classification(features, z, p_labeled=0.1, n_repeat=10, norm=Fals
 
         f1_micro = f1_score(z[split_test], predicted, average='micro')
         f1_macro = f1_score(z[split_test], predicted, average='macro')
+        accuracy = accuracy_score(z[split_test], predicted)
 
-        trace.append((f1_micro, f1_macro))
+        trace.append((f1_micro, f1_macro, accuracy))
 
     return np.array(trace).mean(0)
 
