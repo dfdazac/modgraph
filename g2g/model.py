@@ -263,7 +263,7 @@ class Graph2Gauss:
             Tensorflow session that can be used to obtain the trained embeddings
 
         """
-        early_stopping_score_max = -1.0
+        early_stopping_score_max = -float('inf')
         tolerance = self.tolerance
 
         train_op = tf.train.AdamOptimizer(learning_rate=self.lr).minimize(self.loss)
@@ -299,7 +299,7 @@ class Graph2Gauss:
         
         if tolerance > 0:
             print('WARNING: Training might not have converged. Try increasing max_iter') 
-                  
+
         self.__restore_vars(sess)
 
         return sess
