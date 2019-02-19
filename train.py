@@ -27,14 +27,14 @@ def get_data(dataset_str):
     return dataset[0]
 
 
-def train_encoder(data, method, encoder, dimensions, lr, epochs, rec_weight,
-                  device, seed, link_prediction=False):
+def train_encoder(dataset_str, method, encoder_str, dimensions, lr, epochs,
+                  rec_weight, device, link_prediction=False, seed=0):
     if not torch.cuda.is_available() and device.startswith('cuda'):
         raise ValueError(f'Device {device} specified '
                          'but CUDA is not available')
 
     device = torch.device(device)
-
+    data = get_data(dataset_str)
     neg_edge_index = sample_zero_entries(data.edge_index, seed)
 
     if link_prediction or method == 'gae':
@@ -56,15 +56,12 @@ def train_encoder(data, method, encoder, dimensions, lr, epochs, rec_weight,
     else:
         raise ValueError(f'Unknown model {method}')
 
-    if encoder == 'mlp':
+    if encoder_str == 'mlp':
         encoder_class = MLPEncoder
-    elif encoder == 'gcn':
+    elif encoder_str == 'gcn':
         encoder_class = GraphEncoder
     else:
-        raise ValueError(f'Unknown encoder {encoder}')
-
-    torch.random.manual_seed(seed)
-    np.random.seed(seed)
+        raise ValueError(f'Unknown encoder {encoder_str}')
 
     if method in ['gae', 'dgi']:
         data.x = data.x.to(device)
@@ -159,40 +156,76 @@ else:
 def config():
     dataset_str = 'cora'
     method = 'gae'
-    encoder = 'gcn'
+    encoder_str = 'gcn'
     hidden_dims = [256, 128]
     rec_weight = 0
-    lr = 0.0001
+    lr = 0.001
     epochs = 200
     p_labeled = 0.1
     n_exper = 20
     device = 'cuda'
 
 
-def link_pred_experiments(dataset_str, method, encoder, hidden_dims,
-                          rec_weight, lr, epochs, p_labeled, n_exper, device,
-                          _run):
+@ex.capture
+def log_statistics(results, metrics, _run):
+    """Print result statistics and log them with Sacred
+    Args:
+        - results: numpy array, (n_exper, m) where m is the number of metrics
+        - metrics: list of str containing names of the metrics
+    """
+    mean = np.mean(results, axis=0)
+    std = np.std(results, axis=0)
 
-    data = get_data(dataset_str)
-    encoder, scores = train_encoder(data, method, encoder, hidden_dims, lr,
-                                    epochs, rec_weight, device, seed=0,
-                                    link_prediction=True)
+    print('-' * 50)
+    print('Results')
+
+    for i, m in enumerate(metrics):
+        print('{}: {:.1f} ± {:.2f}'.format(m,
+                                           mean[i] * 100,
+                                           std[i] * 100))
+        _run.log_scalar(f'{metrics[i]} mean', mean[i])
+        _run.log_scalar(f'{metrics[i]} std', std[i])
+
+
+@ex.command
+def link_pred_experiments(dataset_str, method, encoder_str, hidden_dims,
+                          rec_weight, lr, epochs, n_exper, device, _run):
+    torch.random.manual_seed(0)
+    np.random.seed(0)
+    results = np.empty([n_exper, 2])
+
+    for i in range(n_exper):
+        print('\nTrial {:d}/{:d}'.format(i + 1, n_exper))
+        encoder, scores = train_encoder(dataset_str, method, encoder_str,
+                                        hidden_dims, lr, epochs, rec_weight,
+                                        device, seed=i, link_prediction=True)
+        results[i] = scores
+
+    log_statistics(results, ['AUC', 'AP'])
 
 
 @ex.automain
-def node_class_experiments(dataset_str, method, encoder, hidden_dims,
+def node_class_experiments(dataset_str, method, encoder_str, hidden_dims,
                           rec_weight, lr, epochs, p_labeled, n_exper, device,
                           _run):
+    torch.random.manual_seed(0)
+    np.random.seed(0)
+    results = np.empty([n_exper, 1])
 
-    data = get_data(dataset_str)
-    encoder, scores = train_encoder(data, method, encoder, hidden_dims, lr,
-                                    epochs, rec_weight, device, seed=0)
+    for i in range(n_exper):
+        print('\nTrial {:d}/{:d}'.format(i + 1, n_exper))
+        encoder, _ = train_encoder(dataset_str, method, encoder_str,
+                                   hidden_dims, lr, epochs, rec_weight,
+                                   device, seed=i)
 
-    device = torch.device('cpu')
-    data.to(device)
-    encoder.to(device)
-    features = encoder(data, data.edge_index, corrupt=False).detach().numpy()
-    labels = data.y.cpu().numpy()
-    scores = score_node_classification(features, labels, p_labeled, seed=0)
-    print('Accuracy: {:.3f}'.format(scores[2]))
+        data = get_data(dataset_str)
+        encoder.to(torch.device('cpu'))
+        features = encoder(data, data.edge_index,
+                           corrupt=False).detach().numpy()
+        labels = data.y.cpu().numpy()
+        scores = score_node_classification(features, labels, p_labeled, seed=i)
+        test_acc = scores[2]
+        print('test_acc: {:.6f}'.format(test_acc))
+        results[i] = test_acc
 
+    log_statistics(results, ['ACC'])
