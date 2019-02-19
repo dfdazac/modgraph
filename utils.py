@@ -76,8 +76,6 @@ def split_edges(edge_index, seed, add_self_connections=False):
         - list, containing 3 tensors of shape (2, N) corresponding to
         train, validation and test splits respectively.
     """
-    np.random.seed(seed)
-
     adj = adj_from_edge_index(edge_index)
     # Remove diagonal elements
     adj = adj - sp.dia_matrix((adj.diagonal()[np.newaxis, :], [0]),
@@ -94,6 +92,7 @@ def split_edges(edge_index, seed, add_self_connections=False):
 
     # Shuffle edges
     all_edge_idx = np.arange(edges.shape[0])
+    np.random.seed(seed)
     np.random.shuffle(all_edge_idx)
 
     val_edge_idx = all_edge_idx[:num_val]

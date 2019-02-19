@@ -29,9 +29,6 @@ def get_data(dataset_str):
 
 def train_encoder(data, method, encoder, dimensions, lr, epochs, rec_weight,
                   device, seed, link_prediction=False):
-    torch.random.manual_seed(seed)
-    np.random.seed(seed)
-
     if not torch.cuda.is_available() and device.startswith('cuda'):
         raise ValueError(f'Device {device} specified '
                          'but CUDA is not available')
@@ -40,7 +37,7 @@ def train_encoder(data, method, encoder, dimensions, lr, epochs, rec_weight,
 
     neg_edge_index = sample_zero_entries(data.edge_index, seed)
 
-    if link_prediction:
+    if link_prediction or method == 'gae':
         add_self_connections = method == 'node2vec'
         train_pos, val_pos, test_pos = split_edges(data.edge_index, seed,
                                                    add_self_connections)
@@ -66,6 +63,9 @@ def train_encoder(data, method, encoder, dimensions, lr, epochs, rec_weight,
     else:
         raise ValueError(f'Unknown encoder {encoder}')
 
+    torch.random.manual_seed(seed)
+    np.random.seed(seed)
+
     if method in ['gae', 'dgi']:
         data.x = data.x.to(device)
         train_pos = train_pos.to(device)
@@ -87,7 +87,7 @@ def train_encoder(data, method, encoder, dimensions, lr, epochs, rec_weight,
             loss.backward()
             optimizer.step()
 
-            if link_prediction:
+            if link_prediction or method == 'gae':
                 # Evaluate on val edges
                 embeddings = model.encoder(data, train_pos).cpu().detach()
                 auc, ap = score_link_prediction(embeddings, val_pos, val_neg)
@@ -109,7 +109,7 @@ def train_encoder(data, method, encoder, dimensions, lr, epochs, rec_weight,
                       flush=True)
         print()
 
-        if not link_prediction:
+        if not link_prediction and method != 'gae':
             # Save the last state
             torch.save(model.state_dict(), ckpt_name)
 
@@ -157,13 +157,13 @@ else:
 
 @ex.config
 def config():
-    dataset_str = 'amazoncomp'
+    dataset_str = 'cora'
     method = 'gae'
     encoder = 'gcn'
     hidden_dims = [256, 128]
     rec_weight = 0
-    lr = 0.00005
-    epochs = 20
+    lr = 0.0001
+    epochs = 200
     p_labeled = 0.1
     n_exper = 20
     device = 'cuda'
@@ -194,5 +194,5 @@ def node_class_experiments(dataset_str, method, encoder, hidden_dims,
     features = encoder(data, data.edge_index, corrupt=False).detach().numpy()
     labels = data.y.cpu().numpy()
     scores = score_node_classification(features, labels, p_labeled, seed=0)
-    print(scores)
+    print('Accuracy: {:.3f}'.format(scores[2]))
 

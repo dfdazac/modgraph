@@ -315,7 +315,7 @@ def score_node_classification(features, z, p_labeled=0.1, n_repeat=1, seed=0,
         F_1 Score (macro) averaged of n_repeat trials.
     """
     lrcv = LogisticRegressionCV(cv=3, multi_class='multinomial', n_jobs=-1,
-                                max_iter=200, random_state=seed)
+                                max_iter=300, random_state=seed)
 
     if norm:
         features = normalize(features)
