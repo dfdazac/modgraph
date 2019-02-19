@@ -5,53 +5,27 @@ import torch
 import numpy as np
 from torch_geometric.datasets import Planetoid
 from gnnbench import GNNBenchmark
-from sklearn.metrics import roc_auc_score, average_precision_score
 from sacred import Experiment
 from sacred.observers import MongoObserver
 
-from utils import sample_zero_entries, split_edges
+from utils import score_link_prediction, sample_zero_entries, split_edges
 from models import MLPEncoder, GraphEncoder, GAE, DGI, Node2Vec, G2G
 from g2g.utils import score_node_classification
+
 
 def get_dataset(dataset_str, train_examples_per_class, val_examples_per_class):
     path = osp.join(osp.dirname(osp.realpath(__file__)), 'data', dataset_str)
 
     if dataset_str in ('cora', 'citeseer', 'pubmed'):
         dataset = Planetoid(path, dataset_str)
-    elif dataset_str in (
-    'corafull', 'coauthorcs', 'coauthorphys', 'amazoncomp',
-    'amazonphoto'):
+    elif dataset_str in ('corafull', 'coauthorcs', 'coauthorphys',
+                         'amazoncomp', 'amazonphoto'):
         dataset = GNNBenchmark(path, dataset_str, train_examples_per_class,
                                val_examples_per_class)
     else:
         raise ValueError(f'Unknown dataset {dataset_str}')
 
     return dataset
-
-def eval_link_prediction(emb, edges_pos, edges_neg):
-    """Evaluate the AUC and AP scores when using the provided embeddings to
-    predict links between nodes.
-
-        - emb: tensor of shape (N, d) where N is the number of nodes and d
-            the dimension of the embeddings.
-        - edges_pos, edges_neg: tensors of shape (2, p) containing positive
-        and negative edges, respectively, in their columns.
-    Returns:
-        - auc_score, float
-        - ap_score, float
-    """
-    # Get scores for edges using inner product
-    pos_score = (emb[edges_pos[0]] * emb[edges_pos[1]]).sum(dim=1)
-    neg_score = (emb[edges_neg[0]] * emb[edges_neg[1]]).sum(dim=1)
-    preds = torch.cat((pos_score, neg_score)).cpu().numpy()
-
-    targets = torch.cat((torch.ones_like(pos_score),
-                         torch.zeros_like(neg_score))).cpu().numpy()
-
-    auc_score = roc_auc_score(targets, preds)
-    ap_score = average_precision_score(targets, preds)
-
-    return auc_score, ap_score
 
 
 def train_encoder(data, method, encoder, dimensions, lr, epochs, rec_weight,
@@ -114,7 +88,7 @@ def train_encoder(data, method, encoder, dimensions, lr, epochs, rec_weight,
             if link_prediction:
                 # Evaluate on val edges
                 embeddings = model.encoder(data, train_pos).cpu().detach()
-                auc, ap = eval_link_prediction(embeddings, val_pos, val_neg)
+                auc, ap = score_link_prediction(embeddings, val_pos, val_neg)
 
                 if auc > best_auc:
                     # Keep best model on val set
@@ -156,7 +130,7 @@ def train_encoder(data, method, encoder, dimensions, lr, epochs, rec_weight,
         else:
             model.eval()
             embeddings = model.encoder(data, train_pos).cpu().detach()
-            auc, ap = eval_link_prediction(embeddings, test_pos, test_neg)
+            auc, ap = score_link_prediction(embeddings, test_pos, test_neg)
 
         print('test_auc: {:6f}, test_ap: {:6f}'.format(auc, ap))
     else:
@@ -174,7 +148,7 @@ if all([user, password, database]):
     url = f'mongodb://{user}:{password}@ds135812.mlab.com:35812/{database}'
     ex.observers.append(MongoObserver.create(url, database))
 else:
-    print('Running without observers')
+    print('Running without Sacred observers')
 
 
 @ex.config

@@ -1,6 +1,33 @@
 import numpy as np
 import scipy.sparse as sp
 import torch
+from sklearn.metrics import roc_auc_score, average_precision_score
+
+
+def score_link_prediction(emb, edges_pos, edges_neg):
+    """Evaluate the AUC and AP scores when using the provided embeddings to
+    predict links between nodes.
+
+        - emb: tensor of shape (N, d) where N is the number of nodes and d
+            the dimension of the embeddings.
+        - edges_pos, edges_neg: tensors of shape (2, p) containing positive
+        and negative edges, respectively, in their columns.
+    Returns:
+        - auc_score, float
+        - ap_score, float
+    """
+    # Get scores for edges using inner product
+    pos_score = (emb[edges_pos[0]] * emb[edges_pos[1]]).sum(dim=1)
+    neg_score = (emb[edges_neg[0]] * emb[edges_neg[1]]).sum(dim=1)
+    preds = torch.cat((pos_score, neg_score)).cpu().numpy()
+
+    targets = torch.cat((torch.ones_like(pos_score),
+                         torch.zeros_like(neg_score))).cpu().numpy()
+
+    auc_score = roc_auc_score(targets, preds)
+    ap_score = average_precision_score(targets, preds)
+
+    return auc_score, ap_score
 
 
 def sample_zero_entries(edge_index, seed):
