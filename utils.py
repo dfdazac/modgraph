@@ -66,12 +66,15 @@ def sample_zero_entries(edge_index, seed):
 
 
 def split_edges(edge_index, seed, add_self_connections=False):
-    """Obtain positive and negative train/val/test edges for an *undirected*
+    """Obtain train/val/test edges for an *undirected*
     graph given m an edge index.
     Args:
         - edge_index: tensor, (2, N), N is the number of edges.
         - seed: int, use to control randomness
         - add_self_connections: bool
+    Return:
+        - list, containing 3 tensors of shape (2, N) corresponding to
+        train, validation and test splits respectively.
     """
     np.random.seed(seed)
 
@@ -113,6 +116,8 @@ def add_reverse_edges(edges):
     one direction only.
     Args:
         - edges: tensor, (2, N), N is the number of edges.
+    Return:
+        - tensor, (2, 2*N)
     """
     edges_inv = torch.stack((edges[1], edges[0]), dim=0)
     all_edges = torch.cat((edges, edges_inv), dim=1)
@@ -124,6 +129,8 @@ def adj_from_edge_index(edge_index):
     used in the torch_geometric.datasets.Planetoid class).
     Args:
         - edge_index: tensor, (2, N), N is the number of edges.
+    Return:
+        - scipy scr adjacency matrix
     """
     n_edges = edge_index.shape[1]
     rows = edge_index[0].numpy()
@@ -136,6 +143,15 @@ def adj_from_edge_index(edge_index):
 
 def shuffle_graph_labels(data, train_examples_per_class,
                          val_examples_per_class, seed):
+    """Shuffle the label masks in a data object
+    Args:
+        - data: InMemoryDataset object containing graph data
+        - train_examples_per_class: int
+        - val_examples_per_class: int
+        - seed: int, to control randomness
+    Return:
+        - InMemoryDataset with modified label masks
+    """
     np.random.seed(seed)
 
     data.train_mask = torch.zeros(data.num_nodes, dtype=torch.uint8)
