@@ -1,33 +1,44 @@
+from argparse import ArgumentParser
+
 import torch
 from train import ex
 from sklearn.model_selection import ParameterGrid
 
+parser = ArgumentParser()
+parser.add_argument('--log', help='Log all experiments with Sacred',
+                    action='store_true')
+args = parser.parse_args()
+
+if not args.log:
+    ex.observers.clear()
+    print('Running without Sacred observers')
+
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 # Configuration template
-config = {'model_name': None,
-          'device': device,
-          'dataset': None,
+config = {'dataset_str': None,
+          'method': None,
+          'encoder_str': None,
           'hidden_dims': [256, 128],
+          'rec_weight': 0,
           'lr': 0.001,
           'epochs': 200,
-          'random_splits': True,
-          'rec_weight': None,
-          'encoder': 'gcn',
-          'train_examples_per_class': 20,
-          'val_examples_per_class': 30,
-          'n_exper': 20}
+          'p_labeled': 0.1,
+          'n_exper': 20,
+          'device': device}
 
 # Values to be changed in experiments
-param_grid = {'model_name': ['gae'],
-              'dataset': ('cora', 'citeseer', 'pubmed', 'corafull',
-                          'coauthorcs', 'coauthorphys', 'amazoncomp',
-                          'amazonphoto'),
-              'rec_weight': [0.1, 0.5, 0.9]}
+param_grid = {'method': ['gae', 'dgi'],
+              'dataset_str': ['cora', 'citeseer', 'pubmed', 'corafull',
+                              'coauthorcs', 'coauthorphys', 'amazoncomp',
+                              'amazonphoto'],
+              'encoder_str': ['gcn', 'mlp'],
+              'lr': [1e-3, 1e-4, 5e-5]}
 
 grid = ParameterGrid(param_grid)
 
-for i, hparams in enumerate(grid):
-    print('Experiment configuration {:d}/{:d}'.format(i + 1, len(grid)))
-    config.update(hparams)
-    ex.run(config_updates=config)
+for task in ['link_pred_experiments', 'node_class_experiments']:
+    for i, hparams in enumerate(grid):
+        print('Experiment configuration {:d}/{:d}'.format(i + 1, len(grid)))
+        config.update(hparams)
+        ex.run(command_name=task, config_updates=config)
