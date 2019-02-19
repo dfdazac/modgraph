@@ -173,6 +173,7 @@ class Node2Vec(nn.Module):
 
         # Read embeddings and store in encoder
         emb_data = np.loadtxt(embs_path, skiprows=1)
+        os.remove(edges_path)
         os.remove(embs_path)
         embeddings = np.zeros([num_nodes, emb_data.shape[1] - 1])
         idx = emb_data[:, 0].astype(np.int)
