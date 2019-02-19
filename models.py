@@ -155,7 +155,7 @@ class LookupEncoder(nn.Module):
 
 
 class Node2Vec(nn.Module):
-    node2vec_path = 'node2vec/src/main.py'
+    node2vec_path = 'node2vec/main.py'
 
     def __init__(self, edge_index, path, num_nodes, dim=128):
         super(Node2Vec, self).__init__()
