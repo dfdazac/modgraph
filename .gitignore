@@ -122,15 +122,4 @@ saved/*
 
 # Data files
 data/*
-
-# Run logs
-runs/*
-!runs/.gitkeep
-
-# Temporary checkpoints
-.ckpt
-
-# node2vec embeddings
-node2vec/*
-!node2vec/.gitkeep
-!node2vec/src/
+!data/.gitkeep
