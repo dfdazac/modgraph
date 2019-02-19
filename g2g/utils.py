@@ -290,7 +290,8 @@ def score_link_prediction(labels, scores):
     return roc_auc_score(labels, scores), average_precision_score(labels, scores)
 
 
-def score_node_classification(features, z, p_labeled=0.1, n_repeat=10, norm=False):
+def score_node_classification(features, z, p_labeled=0.1, n_repeat=1, seed=0,
+                              norm=False):
     """
     Train a classifier using the node embeddings as features and reports the performance.
 
@@ -313,14 +314,16 @@ def score_node_classification(features, z, p_labeled=0.1, n_repeat=10, norm=Fals
     f1_micro : float
         F_1 Score (macro) averaged of n_repeat trials.
     """
-    lrcv = LogisticRegressionCV(cv=3, multi_class='multinomial', n_jobs=-1)
+    lrcv = LogisticRegressionCV(cv=3, multi_class='multinomial', n_jobs=-1,
+                                max_iter=200, random_state=seed)
 
     if norm:
         features = normalize(features)
 
     trace = []
-    for seed in range(n_repeat):
-        sss = StratifiedShuffleSplit(n_splits=1, test_size=1 - p_labeled, random_state=seed)
+    for i in range(n_repeat):
+        sss = StratifiedShuffleSplit(n_splits=1, test_size=1 - p_labeled,
+                                     random_state=seed)
         split_train, split_test = next(sss.split(features, z))
 
         lrcv.fit(features[split_train], z[split_train])
@@ -349,7 +352,8 @@ def get_hops(A, K):
     Returns
     -------
     hops : dict
-        A dictionary where each 1, 2, ... K, neighborhoods are saved as sparse matrices
+        A dictionary where each 1, 2, ... K, neighborhoods are saved as sparse
+        matrices
     """
     hops = {1: A.tolil(), -1: A.tolil()}
     hops[1].setdiag(0)
@@ -374,12 +378,14 @@ def get_hops(A, K):
 
 def sample_last_hop(A, nodes):
     """
-    For each node in nodes samples a single node from their last (K-th) neighborhood.
+    For each node in nodes samples a single node from their last (K-th)
+    neighborhood.
 
     Parameters
     ----------
     A : scipy.sparse.spmatrix
-        Sparse matrix encoding which nodes belong to any of the 1, 2, ..., K-1, neighborhoods of every node
+        Sparse matrix encoding which nodes belong to any of the 1, 2, ..., K-1,
+        neighborhoods of every node
     nodes : array-like, shape [N]
         The nodes to consider
 
@@ -403,12 +409,14 @@ def sample_last_hop(A, nodes):
 
 def sample_all_hops(hops, nodes=None):
     """
-    For each node in nodes samples a single node from all of their neighborhoods.
+    For each node in nodes samples a single node from all of their
+    neighborhoods.
 
     Parameters
     ----------
     hops : dict
-        A dictionary where each 1, 2, ... K, neighborhoods are saved as sparse matrices
+        A dictionary where each 1, 2, ... K, neighborhoods are saved as sparse
+        matrices
     nodes : array-like, shape [N]
         The nodes to consider
 
