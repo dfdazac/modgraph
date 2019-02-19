@@ -13,19 +13,18 @@ from models import MLPEncoder, GraphEncoder, GAE, DGI, Node2Vec, G2G
 from g2g.utils import score_node_classification
 
 
-def get_dataset(dataset_str, train_examples_per_class, val_examples_per_class):
+def get_data(dataset_str):
     path = osp.join(osp.dirname(osp.realpath(__file__)), 'data', dataset_str)
 
     if dataset_str in ('cora', 'citeseer', 'pubmed'):
         dataset = Planetoid(path, dataset_str)
     elif dataset_str in ('corafull', 'coauthorcs', 'coauthorphys',
                          'amazoncomp', 'amazonphoto'):
-        dataset = GNNBenchmark(path, dataset_str, train_examples_per_class,
-                               val_examples_per_class)
+        dataset = GNNBenchmark(path, dataset_str)
     else:
         raise ValueError(f'Unknown dataset {dataset_str}')
 
-    return dataset
+    return dataset[0]
 
 
 def train_encoder(data, method, encoder, dimensions, lr, epochs, rec_weight,
@@ -116,6 +115,7 @@ def train_encoder(data, method, encoder, dimensions, lr, epochs, rec_weight,
 
         # Evaluate on test edges
         model.load_state_dict(torch.load(ckpt_name))
+        os.remove(ckpt_name)
     elif method == 'node2vec':
         path = osp.join(osp.dirname(osp.realpath(__file__)), 'node2vec',
                         'data')
@@ -140,8 +140,6 @@ def train_encoder(data, method, encoder, dimensions, lr, epochs, rec_weight,
     else:
         auc, ap = None, None
 
-    os.remove(ckpt_name)
-
     return model.encoder, np.array([auc, ap])
 
 
@@ -159,45 +157,35 @@ else:
 
 @ex.config
 def config():
-    model_name = 'gae'
-    device = 'cuda'
-    dataset = 'cora'
-    hidden_dims = [256, 128]
-    lr = 0.00005
-    epochs = 200
-    random_splits = True
-    rec_weight = 0
+    dataset_str = 'amazoncomp'
+    method = 'gae'
     encoder = 'gcn'
-    train_examples_per_class = 20
-    val_examples_per_class = 30
+    hidden_dims = [256, 128]
+    rec_weight = 0
+    lr = 0.00005
+    epochs = 20
+    p_labeled = 0.1
     n_exper = 20
+    device = 'cuda'
 
 
-def link_pred_experiments(model_name, device, dataset, hidden_dims, lr, epochs,
-                          random_splits, rec_weight, encoder,
-                          train_examples_per_class, val_examples_per_class,
-                          n_exper, _run):
-    # Load data
-    dataset = get_dataset(dataset, train_examples_per_class,
-                          val_examples_per_class)
-    data = dataset[0]
+def link_pred_experiments(dataset_str, method, encoder, hidden_dims,
+                          rec_weight, lr, epochs, p_labeled, n_exper, device,
+                          _run):
 
-    encoder, scores = train_encoder(data, model_name, encoder, hidden_dims, lr,
+    data = get_data(dataset_str)
+    encoder, scores = train_encoder(data, method, encoder, hidden_dims, lr,
                                     epochs, rec_weight, device, seed=0,
                                     link_prediction=True)
 
 
 @ex.automain
-def node_classification_experiments(model_name, device, dataset, hidden_dims,
-                                    lr, epochs, random_splits, rec_weight,
-                                    encoder, train_examples_per_class,
-                                    val_examples_per_class, n_exper, _run):
-    # Load data
-    dataset = get_dataset(dataset, train_examples_per_class,
-                          val_examples_per_class)
-    data = dataset[0]
+def node_class_experiments(dataset_str, method, encoder, hidden_dims,
+                          rec_weight, lr, epochs, p_labeled, n_exper, device,
+                          _run):
 
-    encoder, scores = train_encoder(data, model_name, encoder, hidden_dims, lr,
+    data = get_data(dataset_str)
+    encoder, scores = train_encoder(data, method, encoder, hidden_dims, lr,
                                     epochs, rec_weight, device, seed=0)
 
     device = torch.device('cpu')
@@ -205,6 +193,6 @@ def node_classification_experiments(model_name, device, dataset, hidden_dims,
     encoder.to(device)
     features = encoder(data, data.edge_index, corrupt=False).detach().numpy()
     labels = data.y.cpu().numpy()
-    scores = score_node_classification(features, labels, n_repeat=1, seed=0)
+    scores = score_node_classification(features, labels, p_labeled, seed=0)
     print(scores)
 

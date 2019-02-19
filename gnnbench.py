@@ -8,14 +8,12 @@ from torch_geometric.data import Data
 
 from preprocess import eliminate_self_loops as eliminate_self_loops_adj,\
     largest_connected_components, remove_underrepresented_classes
-from utils import shuffle_graph_labels
 
 
 class GNNBenchmark(InMemoryDataset):
     url = 'https://github.com/shchur/gnn-benchmark/raw/master/data/npz'
 
-    def __init__(self, root, name, train_examples_per_class,
-                 val_examples_per_class, transform=None, pre_transform=None):
+    def __init__(self, root, name, transform=None, pre_transform=None):
         name2files = {'corafull': 'cora_full.npz',
                       'coauthorcs': 'ms_academic_cs.npz',
                       'coauthorphys': 'ms_academic_phy.npz',
@@ -23,8 +21,6 @@ class GNNBenchmark(InMemoryDataset):
                       'amazonphoto': 'amazon_electronics_photo.npz'}
 
         self.name = name
-        self.n_train = train_examples_per_class
-        self.n_val = val_examples_per_class
 
         if name in name2files:
             self.raw_file_name = name2files[name]
@@ -49,8 +45,7 @@ class GNNBenchmark(InMemoryDataset):
     def process(self):
         underrepresented_classes = self.name == 'corafull'
         data = read_gnnbenchmark_data(self.raw_dir, self.raw_file_name,
-                                      underrepresented_classes,
-                                      self.n_train, self.n_val)
+                                      underrepresented_classes)
 
         data = data if self.pre_transform is None else self.pre_transform(data)
         data, slices = self.collate([data])
@@ -60,25 +55,20 @@ class GNNBenchmark(InMemoryDataset):
         return '{}()'.format(self.name)
 
 
-def read_gnnbenchmark_data(raw_dir, filename, underrepresented_classes,
-                           train_examples_per_class,
-                           val_examples_per_class):
+def read_gnnbenchmark_data(raw_dir, filename, underrepresented_classes):
     graph = load_dataset(os.path.join(raw_dir, filename))
     graph = graph.standardize()
 
     if underrepresented_classes:
         graph = remove_underrepresented_classes(graph,
-                                                train_examples_per_class,
-                                                val_examples_per_class)
+                                                train_examples_per_class=20,
+                                                val_examples_per_class=30)
         graph = graph.standardize()
 
     edge_index = torch.tensor(graph.adj_matrix.nonzero(), dtype=torch.int64)
     data = Data(x=torch.tensor(graph.attr_matrix.toarray()),
                 edge_index=edge_index,
                 y=torch.tensor(graph.labels, dtype=torch.int64))
-
-    data = shuffle_graph_labels(data, train_examples_per_class,
-                                val_examples_per_class, seed=0)
 
     return data
 
