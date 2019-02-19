@@ -30,6 +30,9 @@ def get_dataset(dataset_str, train_examples_per_class, val_examples_per_class):
 
 def train_encoder(data, method, encoder, dimensions, lr, epochs, rec_weight,
                   device, seed, link_prediction=False):
+    torch.random.manual_seed(seed)
+    np.random.seed(seed)
+
     if not torch.cuda.is_available() and device.startswith('cuda'):
         raise ValueError(f'Device {device} specified '
                          'but CUDA is not available')
@@ -38,7 +41,7 @@ def train_encoder(data, method, encoder, dimensions, lr, epochs, rec_weight,
 
     neg_edge_index = sample_zero_entries(data.edge_index, seed)
 
-    if link_prediction:
+    if link_prediction  or method == 'gae':
         add_self_connections = method == 'node2vec'
         train_pos, val_pos, test_pos = split_edges(data.edge_index, seed,
                                                    add_self_connections)
@@ -85,7 +88,7 @@ def train_encoder(data, method, encoder, dimensions, lr, epochs, rec_weight,
             loss.backward()
             optimizer.step()
 
-            if link_prediction:
+            if link_prediction or method == 'gae':
                 # Evaluate on val edges
                 embeddings = model.encoder(data, train_pos).cpu().detach()
                 auc, ap = score_link_prediction(embeddings, val_pos, val_neg)
@@ -107,7 +110,7 @@ def train_encoder(data, method, encoder, dimensions, lr, epochs, rec_weight,
                       flush=True)
         print()
 
-        if not link_prediction:
+        if not link_prediction and method != 'gae':
             # Save the last state
             torch.save(model.state_dict(), ckpt_name)
 
@@ -119,7 +122,8 @@ def train_encoder(data, method, encoder, dimensions, lr, epochs, rec_weight,
         model = Node2Vec(train_pos, path, data.num_nodes)
     elif method == 'graph2gauss':
         model = G2G(data, dimensions[:-1], dimensions[-1], 1, train_pos,
-                    val_pos, val_neg, test_pos, test_neg, lr, link_prediction)
+                    val_pos, val_neg, test_pos, test_neg, epochs, lr,
+                    link_prediction)
     else:
         raise ValueError
 
@@ -157,7 +161,7 @@ def config():
     device = 'cuda'
     dataset = 'cora'
     hidden_dims = [256, 128]
-    lr = 0.0001
+    lr = 0.001
     epochs = 200
     random_splits = True
     rec_weight = 0
@@ -182,10 +186,10 @@ def link_pred_experiments(model_name, device, dataset, hidden_dims, lr, epochs,
 
 
 @ex.automain
-def node_classification_experiments(model_name, device, dataset, hidden_dims, lr, epochs,
-                          random_splits, rec_weight, encoder,
-                          train_examples_per_class, val_examples_per_class,
-                          n_exper, _run):
+def node_classification_experiments(model_name, device, dataset, hidden_dims,
+                                    lr, epochs, random_splits, rec_weight,
+                                    encoder, train_examples_per_class,
+                                    val_examples_per_class, n_exper, _run):
     # Load data
     dataset = get_dataset(dataset, train_examples_per_class,
                           val_examples_per_class)
@@ -199,5 +203,6 @@ def node_classification_experiments(model_name, device, dataset, hidden_dims, lr
     encoder.to(device)
     features = encoder(data, data.edge_index, corrupt=False).detach().numpy()
     labels = data.y.cpu().numpy()
-    scores = score_node_classification(features, labels, n_repeat=1)
+    scores = score_node_classification(features, labels, n_repeat=1, seed=0)
     print(scores)
+
