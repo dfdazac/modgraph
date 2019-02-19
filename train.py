@@ -41,7 +41,7 @@ def train_encoder(data, method, encoder, dimensions, lr, epochs, rec_weight,
 
     neg_edge_index = sample_zero_entries(data.edge_index, seed)
 
-    if link_prediction  or method == 'gae':
+    if link_prediction:
         add_self_connections = method == 'node2vec'
         train_pos, val_pos, test_pos = split_edges(data.edge_index, seed,
                                                    add_self_connections)
@@ -77,7 +77,7 @@ def train_encoder(data, method, encoder, dimensions, lr, epochs, rec_weight,
                             rec_weight).to(device)
 
         # Train model
-        ckpt_name = '.ckpt'
+        ckpt_name = 'model.ckpt'
         print(f'Training {method}')
         optimizer = torch.optim.Adam(model.parameters(), lr=lr)
         best_auc = 0
@@ -88,7 +88,7 @@ def train_encoder(data, method, encoder, dimensions, lr, epochs, rec_weight,
             loss.backward()
             optimizer.step()
 
-            if link_prediction or method == 'gae':
+            if link_prediction:
                 # Evaluate on val edges
                 embeddings = model.encoder(data, train_pos).cpu().detach()
                 auc, ap = score_link_prediction(embeddings, val_pos, val_neg)
@@ -110,12 +110,12 @@ def train_encoder(data, method, encoder, dimensions, lr, epochs, rec_weight,
                       flush=True)
         print()
 
-        if not link_prediction and method != 'gae':
+        if not link_prediction:
             # Save the last state
             torch.save(model.state_dict(), ckpt_name)
 
         # Evaluate on test edges
-        model.load_state_dict(torch.load(osp.join(ckpt_name)))
+        model.load_state_dict(torch.load(ckpt_name))
     elif method == 'node2vec':
         path = osp.join(osp.dirname(osp.realpath(__file__)), 'node2vec',
                         'data')
@@ -140,6 +140,8 @@ def train_encoder(data, method, encoder, dimensions, lr, epochs, rec_weight,
     else:
         auc, ap = None, None
 
+    os.remove(ckpt_name)
+
     return model.encoder, np.array([auc, ap])
 
 
@@ -161,7 +163,7 @@ def config():
     device = 'cuda'
     dataset = 'cora'
     hidden_dims = [256, 128]
-    lr = 0.001
+    lr = 0.00005
     epochs = 200
     random_splits = True
     rec_weight = 0
