@@ -18,7 +18,7 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 # Configuration template
 config = {'dataset_str': None,
           'method': None,
-          'encoder_str': None,
+          'encoder_str': 'mlp',
           'hidden_dims': [256, 128],
           'rec_weight': 0,
           'lr': 0.001,
@@ -28,11 +28,10 @@ config = {'dataset_str': None,
           'device': device}
 
 # Values to be changed in experiments
-param_grid = {'method': ['gae', 'dgi'],
+param_grid = {'method': ['graph2gauss'],
               'dataset_str': ['cora', 'citeseer', 'pubmed', 'corafull',
                               'coauthorcs', 'coauthorphys', 'amazoncomp',
                               'amazonphoto'],
-              'encoder_str': ['gcn', 'mlp'],
               'lr': [1e-3, 1e-4, 5e-5]}
 
 grid = ParameterGrid(param_grid)
