@@ -74,8 +74,6 @@ class Graph2Gauss:
             self.energy_fn = self.energy_kl
         elif energy == 'sqeuclidean':
             self.energy_fn = self.energy_squared_dist
-        elif energy == 'gausskernel':
-            self.energy_fn = self.energy_gauss_kernel
         else:
             raise ValueError('Unknown energy function {}'.format(energy))
 
@@ -214,11 +212,6 @@ class Graph2Gauss:
     def energy_squared_dist(self, pairs):
         ij_mu = tf.gather(self.mu, pairs)
         dist = tf.reduce_sum(tf.square(ij_mu[:, 0] - ij_mu[:, 1]), 1)
-        return dist
-
-    def energy_gauss_kernel(self, pairs):
-        sq_dist = self.energy_squared_dist(pairs)
-        dist = tf.exp(-sq_dist/0.1)
         return dist
 
     def __dataset_generator(self, hops, scale_terms):
