@@ -17,7 +17,7 @@ class Graph2Gauss:
     def __init__(self, A, X, L, train_ones, val_ones, val_zeros, test_ones,
                  test_zeros, K=1, p_val=0.10, p_test=0.05, p_nodes=0.0,
                  n_hidden=None, max_iter=2000, lr=1e-3, tolerance=100,
-                 scale=False, seed=0, verbose=True):
+                 scale=False, seed=0, verbose=True, energy='sqeuclidean'):
         """
         Parameters
         ----------
@@ -70,6 +70,15 @@ class Graph2Gauss:
         self.scale = scale
         self.verbose = verbose
 
+        if energy == 'kl':
+            self.energy_fn = self.energy_kl
+        elif energy == 'sqeuclidean':
+            self.energy_fn = self.energy_squared_dist
+        elif energy == 'gausskernel':
+            self.energy_fn = self.energy_gauss_kernel
+        else:
+            raise ValueError('Unknown energy function {}'.format(energy))
+
         if n_hidden is None:
             n_hidden = [512]
         self.n_hidden = n_hidden
@@ -96,7 +105,7 @@ class Graph2Gauss:
         # setup the validation set for easy evaluation
         if p_val > 0:
             val_edges = np.row_stack((val_ones, val_zeros))
-            self.neg_val_energy = -self.energy_kl(val_edges)
+            self.neg_val_energy = -self.energy_fn(val_edges)
             self.val_ground_truth = A[val_edges[:, 0], val_edges[:, 1]].A1
             self.val_early_stopping = True
         else:
@@ -105,12 +114,12 @@ class Graph2Gauss:
         # setup the test set for easy evaluation
         if p_test > 0:
             test_edges = np.row_stack((test_ones, test_zeros))
-            self.neg_test_energy = -self.energy_kl(test_edges)
+            self.neg_test_energy = -self.energy_fn(test_edges)
             self.test_ground_truth = A[test_edges[:, 0], test_edges[:, 1]].A1
 
         # setup the inductive test set for easy evaluation
         if p_nodes > 0:
-            self.neg_ind_energy = -self.energy_kl(self.ind_pairs)
+            self.neg_ind_energy = -self.energy_fn(self.ind_pairs)
 
     def __build(self):
         w_init = tf.contrib.layers.xavier_initializer
@@ -141,8 +150,8 @@ class Graph2Gauss:
     def __build_loss(self):
         hop_pos = tf.stack([self.triplets[:, 0], self.triplets[:, 1]], 1)
         hop_neg = tf.stack([self.triplets[:, 0], self.triplets[:, 2]], 1)
-        eng_pos = self.energy_kl(hop_pos)
-        eng_neg = self.energy_kl(hop_neg)
+        eng_pos = self.energy_fn(hop_pos)
+        eng_neg = self.energy_fn(hop_neg)
         energy = tf.square(eng_pos) + tf.exp(-eng_neg)
 
         if self.scale:
@@ -201,6 +210,16 @@ class Graph2Gauss:
         mu_diff_sq = tf.reduce_sum(tf.square(ij_mu[:, 0] - ij_mu[:, 1]) / ij_sigma[:, 0], 1)
 
         return 0.5 * (trace_fac + mu_diff_sq - self.L - log_det)
+
+    def energy_squared_dist(self, pairs):
+        ij_mu = tf.gather(self.mu, pairs)
+        dist = tf.reduce_sum(tf.square(ij_mu[:, 0] - ij_mu[:, 1]), 1)
+        return dist
+
+    def energy_gauss_kernel(self, pairs):
+        sq_dist = self.energy_squared_dist(pairs)
+        dist = tf.exp(-sq_dist/0.1)
+        return dist
 
     def __dataset_generator(self, hops, scale_terms):
         """

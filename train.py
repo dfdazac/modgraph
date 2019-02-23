@@ -155,8 +155,8 @@ else:
 @ex.config
 def config():
     dataset_str = 'cora'
-    method = 'gae'
-    encoder_str = 'gcn'
+    method = 'graph2gauss'
+    encoder_str = 'mlp'
     hidden_dims = [256, 128]
     rec_weight = 0
     lr = 0.001
