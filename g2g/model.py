@@ -1,7 +1,7 @@
 import numpy as np
 import tensorflow as tf
 from .utils import *
-from .gcn import GraphConvolution
+from .gcn import GraphConvolution, preprocess_adj
 
 
 class Graph2Gauss:
@@ -18,7 +18,7 @@ class Graph2Gauss:
     def __init__(self, A, X, L, train_ones, val_ones, val_zeros, test_ones,
                  test_zeros, K=1, p_val=0.10, p_test=0.05, p_nodes=0.0,
                  n_hidden=None, max_iter=2000, lr=1e-3, tolerance=100,
-                 scale=False, seed=0, verbose=True, energy='sqeuclidean',
+                 scale=False, seed=0, verbose=True, energy='kl',
                  encoder='mlp'):
         """
         Parameters
@@ -65,9 +65,10 @@ class Graph2Gauss:
             self.X = tf.SparseTensor(*sparse_feeder(X))
             self.feed_dict = None
 
-        self.num_features_nonzero = X.shape[1]
+        self.num_features_nonzero = [X.count_nonzero()]
         if encoder == 'gcn':
-            self.support = tf.SparseTensor()
+            A_norm = preprocess_adj(A).astype(np.float32)
+            self.support = tf.SparseTensor(*sparse_feeder(A_norm))
             self.__build = self.build_gcn
         elif encoder == 'mlp':
             self.support = None
@@ -167,7 +168,7 @@ class Graph2Gauss:
     def build_gcn(self):
         sizes = [self.D] + self.n_hidden
         placeholders = {'dropout': 0,
-                        'support': self.support,
+                        'support': [self.support],
                         'num_features_nonzero': self.num_features_nonzero}
 
         for i in range(1, len(sizes)):

@@ -183,8 +183,9 @@ class Node2Vec(nn.Module):
 
 
 class G2G(nn.Module):
-    def __init__(self, data, n_hidden, dim, K, train_ones, val_ones, val_zeros,
-                 test_ones, test_zeros, epochs, lr, link_prediction):
+    def __init__(self, data, encoder, n_hidden, dim, train_ones, val_ones,
+                 val_zeros, test_ones, test_zeros, epochs, lr, K,
+                 link_prediction):
         super(G2G, self).__init__()
 
         train_ones = train_ones.cpu().numpy().T
@@ -200,12 +201,12 @@ class G2G(nn.Module):
 
             g2g = Graph2Gauss(A, X, dim, train_ones, val_ones, val_zeros,
                               test_ones, test_zeros, K, n_hidden=n_hidden,
-                              max_iter=epochs, lr=lr)
+                              max_iter=epochs, lr=lr, encoder=encoder)
         else:
             g2g = Graph2Gauss(A, X, dim, train_ones, val_ones=None,
                               val_zeros=None, test_ones=None, test_zeros=None,
                               K=K, p_val=0, p_test=0, n_hidden=n_hidden,
-                              max_iter=epochs, lr=lr)
+                              max_iter=epochs, lr=lr, encoder=encoder)
 
         session = g2g.train()
         mu, sigma = session.run([g2g.mu, g2g.sigma])

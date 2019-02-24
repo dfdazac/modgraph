@@ -1,5 +1,6 @@
 import tensorflow as tf
 import numpy as np
+import scipy.sparse as sp
 
 # global unique layer ID dictionary for layer name assignment
 _LAYER_UIDS = {}
@@ -162,9 +163,9 @@ class GraphConvolution(Layer):
 
         # dropout
         if self.sparse_inputs:
-            x = sparse_dropout(x, 1-self.dropout, self.num_features_nonzero)
+           x = sparse_dropout(x, 1-self.dropout, self.num_features_nonzero)
         else:
-            x = tf.nn.dropout(x, 1-self.dropout)
+           x = tf.nn.dropout(x, 1-self.dropout)
 
         # convolve
         supports = list()
@@ -257,3 +258,19 @@ def zeros(shape, name=None):
     """All zeros."""
     initial = tf.zeros(shape, dtype=tf.float32)
     return tf.Variable(initial, name=name)
+
+
+def normalize_adj(adj):
+    """Symmetrically normalize adjacency matrix."""
+    adj = sp.coo_matrix(adj)
+    rowsum = np.array(adj.sum(1))
+    d_inv_sqrt = np.power(rowsum, -0.5).flatten()
+    d_inv_sqrt[np.isinf(d_inv_sqrt)] = 0.
+    d_mat_inv_sqrt = sp.diags(d_inv_sqrt)
+    return adj.dot(d_mat_inv_sqrt).transpose().dot(d_mat_inv_sqrt).tocoo()
+
+
+def preprocess_adj(adj):
+    """Preprocessing of adjacency matrix for simple GCN model and conversion to tuple representation."""
+    adj_normalized = normalize_adj(adj + sp.eye(adj.shape[0]))
+    return adj_normalized
