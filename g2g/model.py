@@ -1,6 +1,7 @@
 import numpy as np
 import tensorflow as tf
 from .utils import *
+from .gcn import GraphConvolution
 
 
 class Graph2Gauss:
@@ -17,7 +18,8 @@ class Graph2Gauss:
     def __init__(self, A, X, L, train_ones, val_ones, val_zeros, test_ones,
                  test_zeros, K=1, p_val=0.10, p_test=0.05, p_nodes=0.0,
                  n_hidden=None, max_iter=2000, lr=1e-3, tolerance=100,
-                 scale=False, seed=0, verbose=True, energy='sqeuclidean'):
+                 scale=False, seed=0, verbose=True, energy='sqeuclidean',
+                 encoder='mlp'):
         """
         Parameters
         ----------
@@ -62,6 +64,16 @@ class Graph2Gauss:
         else:
             self.X = tf.SparseTensor(*sparse_feeder(X))
             self.feed_dict = None
+
+        self.num_features_nonzero = X.shape[1]
+        if encoder == 'gcn':
+            self.support = tf.SparseTensor()
+            self.__build = self.build_gcn
+        elif encoder == 'mlp':
+            self.support = None
+            self.__build = self.build_mlp
+        else:
+            raise ValueError('Unkown encoder {}'.format(encoder))
 
         self.N, self.D = X.shape
         self.L = L
@@ -119,15 +131,18 @@ class Graph2Gauss:
         if p_nodes > 0:
             self.neg_ind_energy = -self.energy_fn(self.ind_pairs)
 
-    def __build(self):
+    def build_mlp(self):
         w_init = tf.contrib.layers.xavier_initializer
 
         sizes = [self.D] + self.n_hidden
 
         for i in range(1, len(sizes)):
-            W = tf.get_variable(name='W{}'.format(i), shape=[sizes[i - 1], sizes[i]], dtype=tf.float32,
+            W = tf.get_variable(name='W{}'.format(i),
+                                shape=[sizes[i - 1], sizes[i]],
+                                dtype=tf.float32,
                                 initializer=w_init())
-            b = tf.get_variable(name='b{}'.format(i), shape=[sizes[i]], dtype=tf.float32, initializer=w_init())
+            b = tf.get_variable(name='b{}'.format(i), shape=[sizes[i]],
+                                dtype=tf.float32, initializer=w_init())
 
             if i == 1:
                 encoded = tf.sparse_tensor_dense_matmul(self.X, W) + b
@@ -136,14 +151,41 @@ class Graph2Gauss:
 
             encoded = tf.nn.relu(encoded)
 
-        W_mu = tf.get_variable(name='W_mu', shape=[sizes[-1], self.L], dtype=tf.float32, initializer=w_init())
-        b_mu = tf.get_variable(name='b_mu', shape=[self.L], dtype=tf.float32, initializer=w_init())
+        W_mu = tf.get_variable(name='W_mu', shape=[sizes[-1], self.L],
+                               dtype=tf.float32, initializer=w_init())
+        b_mu = tf.get_variable(name='b_mu', shape=[self.L], dtype=tf.float32,
+                               initializer=w_init())
         self.mu = tf.matmul(encoded, W_mu) + b_mu
 
-        W_sigma = tf.get_variable(name='W_sigma', shape=[sizes[-1], self.L], dtype=tf.float32, initializer=w_init())
-        b_sigma = tf.get_variable(name='b_sigma', shape=[self.L], dtype=tf.float32, initializer=w_init())
+        W_sigma = tf.get_variable(name='W_sigma', shape=[sizes[-1], self.L],
+                                  dtype=tf.float32, initializer=w_init())
+        b_sigma = tf.get_variable(name='b_sigma', shape=[self.L],
+                                  dtype=tf.float32, initializer=w_init())
         log_sigma = tf.matmul(encoded, W_sigma) + b_sigma
         self.sigma = tf.nn.elu(log_sigma) + 1 + 1e-14
+
+    def build_gcn(self):
+        sizes = [self.D] + self.n_hidden
+        placeholders = {'dropout': 0,
+                        'support': self.support,
+                        'num_features_nonzero': self.num_features_nonzero}
+
+        for i in range(1, len(sizes)):
+            if i == 1:
+                gcn_layer = GraphConvolution(sizes[i - 1], sizes[i],
+                                             placeholders, sparse_inputs=True)
+                encoded = gcn_layer(self.X)
+            else:
+                gcn_layer = GraphConvolution(sizes[i - 1], sizes[i],
+                                             placeholders)
+                encoded = gcn_layer(encoded)
+
+        gcn_mu = GraphConvolution(sizes[-1], self.L, placeholders, act=None)
+        self.mu = gcn_mu(encoded)
+
+        gcn_sigma = GraphConvolution(sizes[-1], self.L, placeholders,
+                                     act=tf.nn.elu)
+        self.sigma = gcn_sigma(encoded) + 1 + 1e-14
 
     def __build_loss(self):
         hop_pos = tf.stack([self.triplets[:, 0], self.triplets[:, 1]], 1)
