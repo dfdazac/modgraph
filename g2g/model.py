@@ -74,7 +74,7 @@ class Graph2Gauss:
             self.support = None
             self.__build = self.build_mlp
         else:
-            raise ValueError('Unkown encoder {}'.format(encoder))
+            raise ValueError('Unknown encoder {}'.format(encoder))
 
         self.N, self.D = X.shape
         self.L = L
