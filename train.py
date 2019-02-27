@@ -120,7 +120,7 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, lr, epochs,
     elif method == 'graph2gauss':
         model = G2G(data, encoder_str, dimensions[:-1], dimensions[-1],
                     train_pos, val_pos, val_neg, test_pos, test_neg, epochs,
-                    lr, K=1, link_prediction=link_prediction)
+                    lr, K=2, link_prediction=link_prediction)
     else:
         raise ValueError
 
