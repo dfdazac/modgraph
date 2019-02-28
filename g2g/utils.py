@@ -396,14 +396,23 @@ def sample_last_hop(A, nodes):
     """
     N = A.shape[0]
 
+    # Sample any nodes at random
     sampled = np.random.randint(0, N, len(nodes))
 
+    # For all rows, select sampled columns.
+    # Count how many entries are nonzero in any of the 1, ..., K neighborhoods
     nnz = A[nodes, sampled].nonzero()[1]
     while len(nnz) != 0:
+        # If there are still nonzero entries, generate samples again
+        # BUT ONLY for those that were nonzero before (hence size=len(nnz))
         new_sample = np.random.randint(0, N, len(nnz))
+        # Replace those samples that generated nonzero entries
         sampled[nnz] = new_sample
+        # Count nonzeros again
         nnz = A[nnz, new_sample].nonzero()[1]
 
+    # The returned sampled nodes are neighbors that are not in any of the
+    # the 1, 2, ... K neighborhoods
     return sampled
 
 
