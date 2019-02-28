@@ -9,7 +9,8 @@ from gnnbench import GNNBenchmark
 from sacred import Experiment
 from sacred.observers import MongoObserver
 
-from utils import score_link_prediction, sample_zero_entries, split_edges
+from utils import (score_link_prediction, sample_zero_entries, split_edges,
+                   sample_edges)
 from models import MLPEncoder, GraphEncoder, GAE, DGI, Node2Vec, G2G
 from g2g.utils import score_node_classification
 
@@ -37,16 +38,27 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, lr, epochs,
 
     device = torch.device(device)
     data = get_data(dataset_str)
-    neg_edge_index = sample_zero_entries(data.edge_index, seed)
 
     if link_prediction or method == 'gae':
+        neg_edge_index = sample_zero_entries(data.edge_index, seed,
+                                             samples_fraction=10)
         add_self_connections = method == 'node2vec'
         train_pos, val_pos, test_pos = split_edges(data.edge_index, seed,
                                                    add_self_connections)
-        train_neg, val_neg, test_neg = split_edges(neg_edge_index, seed)
+        num_val, num_test = val_pos.shape[1], test_pos.shape[1]
+        train_neg_all, val_neg, test_neg = split_edges(neg_edge_index, seed,
+                                                       num_val=num_val,
+                                                       num_test=num_test)
+        num_train = train_pos.shape[1]
+        train_neg = sample_edges(train_neg_all, num_train, seed)
+        resample_neg = True
     else:
+        neg_edge_index = sample_zero_entries(data.edge_index, seed)
         train_pos, val_pos, test_pos = data.edge_index, None, None
-        train_neg, val_neg, test_neg = neg_edge_index, None, None
+        train_neg_all, val_neg, test_neg = neg_edge_index, None, None
+        num_train = train_pos.shape[1]
+        train_neg = train_neg_all
+        resample_neg = False
 
     # Create model
     if method == 'dgi':
@@ -107,6 +119,11 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, lr, epochs,
                 log = '\r[{:03d}/{:03d}] train loss: {:.6f}'
                 print(log.format(epoch, epochs, loss.item()), end='',
                       flush=True)
+
+            if resample_neg:
+                train_neg = sample_edges(train_neg_all,
+                                         num_train, seed+epoch).to(device)
+
         print()
 
         if not link_prediction and method != 'gae':
@@ -159,7 +176,7 @@ else:
 def config():
     dataset_str = 'cora'
     method = 'gae'
-    encoder_str = 'mlp'
+    encoder_str = 'gcn'
     hidden_dims = [256, 128]
     rec_weight = 0
     lr = 0.001

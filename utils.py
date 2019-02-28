@@ -32,23 +32,27 @@ def score_link_prediction(emb, edges_pos, edges_neg):
     return auc_score, ap_score
 
 
-def sample_zero_entries(edge_index, seed):
+def sample_zero_entries(edge_index, seed, samples_fraction=1.0):
     """Obtain zero entries from a sparse matrix.
 
     Args:
         edge_index (tensor): (2, N), N is the number of edges.
         seed (int): to control randomness
-        n_samples (int): number of samples to obtain
+        samples_fraction (float): the number of edges sampled is
+            N * samples_fraction.
 
     Returns:
         torch.tensor, (2, N) containing zero entries
     """
+    n_edges = edge_index.shape[1]
+
     np.random.seed(seed)
     # Number of edges in both directions must be even
-    n_samples = int(np.ceil(edge_index.shape[1]/2) * 2)
+    n_samples = int(np.ceil(samples_fraction * n_edges/2) * 2)
     adjacency = adj_from_edge_index(edge_index)
     zero_entries = np.zeros([2, n_samples], dtype=np.int32)
     nonzero_or_sampled = set(zip(*adjacency.nonzero()))
+
     i = 0
     while True:
         t = tuple(np.random.randint(0, adjacency.shape[0], 2))
@@ -70,7 +74,8 @@ def sample_zero_entries(edge_index, seed):
     return torch.tensor(zero_entries, dtype=torch.long)
 
 
-def split_edges(edge_index, seed, add_self_connections=False):
+def split_edges(edge_index, seed, add_self_connections=False,
+                num_val=None, num_test=None):
     """Obtain train/val/test edges for an *undirected*
     graph given m an edge index.
 
@@ -94,8 +99,10 @@ def split_edges(edge_index, seed, add_self_connections=False):
 
     adj_triu = sp.triu(adj)
     edges = np.array(adj_triu.nonzero()).T
-    num_test = int(np.floor(edges.shape[0] / 10.))
-    num_val = int(np.floor(edges.shape[0] / 20.))
+    if num_test is None:
+        num_test = int(np.floor(edges.shape[0] / 10.))
+    if num_val is None:
+        num_val = int(np.floor(edges.shape[0] / 20.))
 
     # Shuffle edges
     all_edge_idx = np.arange(edges.shape[0])
@@ -180,3 +187,21 @@ def shuffle_graph_labels(data, train_examples_per_class,
         data.test_mask[idx[n_train + n_val:]] = 1
 
     return data
+
+
+def sample_edges(edge_index, n_samples, seed):
+    """Sample edges at random from and edge list
+
+    Args:
+        edge_index (tensor): (2, N), N is the number of edges.
+        n_samples (int): number of samples to collect
+        seed (int): to control randomness
+
+    Returns:
+        list, containing 3 tensors of shape (2, N) corresponding to
+            train, validation and test splits respectively.
+    """
+    N = edge_index.shape[1]
+    np.random.seed(seed)
+    rand_idx = np.random.choice(np.arange(N), n_samples, replace=False)
+    return edge_index[:, rand_idx]
