@@ -1,5 +1,6 @@
 import os.path as osp
 import os
+import time
 
 import torch
 import numpy as np
@@ -28,7 +29,8 @@ def get_data(dataset_str):
 
 
 def train_encoder(dataset_str, method, encoder_str, dimensions, lr, epochs,
-                  rec_weight, device, link_prediction=False, seed=0):
+                  rec_weight, device, link_prediction=False, seed=0,
+                  ckpt_name=None):
     if not torch.cuda.is_available() and device.startswith('cuda'):
         raise ValueError(f'Device {device} specified '
                          'but CUDA is not available')
@@ -73,7 +75,8 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, lr, epochs,
                             rec_weight).to(device)
 
         # Train model
-        ckpt_name = 'model.ckpt'
+        if ckpt_name is None:
+            ckpt_name = 'model'
         print(f'Training {method}')
         optimizer = torch.optim.Adam(model.parameters(), lr=lr)
         best_auc = 0
@@ -155,7 +158,7 @@ else:
 @ex.config
 def config():
     dataset_str = 'cora'
-    method = 'graph2gauss'
+    method = 'gae'
     encoder_str = 'mlp'
     hidden_dims = [256, 128]
     rec_weight = 0
@@ -164,10 +167,11 @@ def config():
     p_labeled = 0.1
     n_exper = 20
     device = 'cuda'
+    timestamp = str(int(time.time()))
 
 
 @ex.capture
-def log_statistics(results, metrics, _run):
+def log_statistics(results, metrics, timestamp, _run):
     """Print result statistics and log them with Sacred
     Args:
         - results: numpy array, (n_exper, m) where m is the number of metrics
@@ -177,6 +181,7 @@ def log_statistics(results, metrics, _run):
     std = np.std(results, axis=0)
 
     print('-' * 50)
+    print('Experiment timestamp: ' + timestamp)
     print('Results')
 
     for i, m in enumerate(metrics):
@@ -189,16 +194,18 @@ def log_statistics(results, metrics, _run):
 
 @ex.command
 def link_pred_experiments(dataset_str, method, encoder_str, hidden_dims,
-                          rec_weight, lr, epochs, n_exper, device, _run):
+                          rec_weight, lr, epochs, n_exper, device, timestamp,
+                          _run):
     torch.random.manual_seed(0)
     np.random.seed(0)
     results = np.empty([n_exper, 2])
-
+    print('Experiment timestamp: ' + timestamp)
     for i in range(n_exper):
         print('\nTrial {:d}/{:d}'.format(i + 1, n_exper))
         encoder, scores = train_encoder(dataset_str, method, encoder_str,
                                         hidden_dims, lr, epochs, rec_weight,
-                                        device, seed=i, link_prediction=True)
+                                        device, seed=i, link_prediction=True,
+                                        ckpt_name=timestamp)
         results[i] = scores
 
     log_statistics(results, ['AUC', 'AP'])
@@ -207,16 +214,16 @@ def link_pred_experiments(dataset_str, method, encoder_str, hidden_dims,
 @ex.automain
 def node_class_experiments(dataset_str, method, encoder_str, hidden_dims,
                           rec_weight, lr, epochs, p_labeled, n_exper, device,
-                          _run):
+                           timestamp, _run):
     torch.random.manual_seed(0)
     np.random.seed(0)
     results = np.empty([n_exper, 1])
-
+    print('Experiment timestamp: ' + timestamp)
     for i in range(n_exper):
         print('\nTrial {:d}/{:d}'.format(i + 1, n_exper))
         encoder, _ = train_encoder(dataset_str, method, encoder_str,
                                    hidden_dims, lr, epochs, rec_weight,
-                                   device, seed=i)
+                                   device, seed=i, ckpt_name=timestamp)
 
         data = get_data(dataset_str)
         encoder.to(torch.device('cpu'))
