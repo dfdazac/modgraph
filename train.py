@@ -140,7 +140,7 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, lr, epochs,
     elif method == 'graph2gauss':
         model = G2G(data, encoder_str, dimensions[:-1], dimensions[-1],
                     train_pos, val_pos, val_neg, test_pos, test_neg, epochs,
-                    lr, K=2, link_prediction=link_prediction)
+                    lr, K=1, link_prediction=link_prediction)
     else:
         raise ValueError
 
@@ -162,12 +162,10 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, lr, epochs,
 
 ex = Experiment()
 # Set up database logs
-user = os.environ.get('MLAB_USR')
-password = os.environ.get('MLAB_PWD')
+uri = os.environ.get('MLAB_URI')
 database = os.environ.get('MLAB_DB')
-if all([user, password, database]):
-    url = f'mongodb://{user}:{password}@ds135812.mlab.com:35812/{database}'
-    ex.observers.append(MongoObserver.create(url, database))
+if all([uri, database]):
+    ex.observers.append(MongoObserver.create(uri, database))
 else:
     print('Running without Sacred observers')
 
@@ -230,7 +228,7 @@ def link_pred_experiments(dataset_str, method, encoder_str, hidden_dims,
 
 @ex.automain
 def node_class_experiments(dataset_str, method, encoder_str, hidden_dims,
-                          rec_weight, lr, epochs, p_labeled, n_exper, device,
+                           rec_weight, lr, epochs, p_labeled, n_exper, device,
                            timestamp, _run):
     torch.random.manual_seed(0)
     np.random.seed(0)
