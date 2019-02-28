@@ -8,13 +8,15 @@ def score_link_prediction(emb, edges_pos, edges_neg):
     """Evaluate the AUC and AP scores when using the provided embeddings to
     predict links between nodes.
 
-        - emb: tensor of shape (N, d) where N is the number of nodes and d
+    Args:
+        emb: tensor of shape (N, d) where N is the number of nodes and d
             the dimension of the embeddings.
-        - edges_pos, edges_neg: tensors of shape (2, p) containing positive
+        edges_pos, edges_neg: tensors of shape (2, p) containing positive
         and negative edges, respectively, in their columns.
+
     Returns:
-        - auc_score, float
-        - ap_score, float
+        auc_score, float
+        ap_score, float
     """
     # Get scores for edges using inner product
     pos_score = (emb[edges_pos[0]] * emb[edges_pos[1]]).sum(dim=1)
@@ -32,11 +34,14 @@ def score_link_prediction(emb, edges_pos, edges_neg):
 
 def sample_zero_entries(edge_index, seed):
     """Obtain zero entries from a sparse matrix.
+
     Args:
-        - edge_index: tensor, (2, N), N is the number of edges.
-        - n_samples: int, number of samples to obtain
-    Return:
-        - torch.tensor, (2, N) containing zero entries
+        edge_index (tensor): (2, N), N is the number of edges.
+        seed (int): to control randomness
+        n_samples (int): number of samples to obtain
+
+    Returns:
+        torch.tensor, (2, N) containing zero entries
     """
     np.random.seed(seed)
     # Number of edges in both directions must be even
@@ -68,13 +73,15 @@ def sample_zero_entries(edge_index, seed):
 def split_edges(edge_index, seed, add_self_connections=False):
     """Obtain train/val/test edges for an *undirected*
     graph given m an edge index.
+
     Args:
-        - edge_index: tensor, (2, N), N is the number of edges.
-        - seed: int, use to control randomness
-        - add_self_connections: bool
-    Return:
-        - list, containing 3 tensors of shape (2, N) corresponding to
-        train, validation and test splits respectively.
+        edge_index (tensor): (2, N), N is the number of edges.
+        seed (int): to control randomness
+        add_self_connections (bool):
+
+    Returns:
+        list, containing 3 tensors of shape (2, N) corresponding to
+            train, validation and test splits respectively.
     """
     adj = adj_from_edge_index(edge_index)
     # Remove diagonal elements
@@ -113,10 +120,12 @@ def split_edges(edge_index, seed, add_self_connections=False):
 def add_reverse_edges(edges):
     """Add edges in the reverse direction to a tensor containing edges in
     one direction only.
+
     Args:
-        - edges: tensor, (2, N), N is the number of edges.
-    Return:
-        - tensor, (2, 2*N)
+        edges (tensor): (2, N), N is the number of edges.
+
+    Returns:
+        tensor, (2, 2*N)
     """
     edges_inv = torch.stack((edges[1], edges[0]), dim=0)
     all_edges = torch.cat((edges, edges_inv), dim=1)
@@ -126,10 +135,12 @@ def add_reverse_edges(edges):
 def adj_from_edge_index(edge_index):
     """Get a sparse symmetric adjacency matrix from an edge index (as the one
     used in the torch_geometric.datasets.Planetoid class).
+
     Args:
-        - edge_index: tensor, (2, N), N is the number of edges.
-    Return:
-        - scipy scr adjacency matrix
+        edge_index (tensor): (2, N), N is the number of edges.
+
+    Returns:
+        scipy scr adjacency matrix
     """
     n_edges = edge_index.shape[1]
     rows = edge_index[0].numpy()
@@ -143,13 +154,15 @@ def adj_from_edge_index(edge_index):
 def shuffle_graph_labels(data, train_examples_per_class,
                          val_examples_per_class, seed):
     """Shuffle the label masks in a data object
+
     Args:
-        - data: InMemoryDataset object containing graph data
-        - train_examples_per_class: int
-        - val_examples_per_class: int
-        - seed: int, to control randomness
-    Return:
-        - InMemoryDataset with modified label masks
+        data (InMemoryDataset): object containing graph data
+        train_examples_per_class (int):
+        val_examples_per_class (int):
+        seed (int): to control randomness
+
+    Returns:
+        InMemoryDataset with modified label masks
     """
     np.random.seed(seed)
 
