@@ -1,4 +1,5 @@
 from argparse import ArgumentParser
+import time
 
 import torch
 from train import ex
@@ -22,10 +23,11 @@ config = {'dataset_str': None,
           'hidden_dims': [256, 128],
           'rec_weight': 0,
           'lr': None,
-          'epochs': 200,
+          'epochs': 1,
           'p_labeled': 0.1,
           'n_exper': 20,
-          'device': device}
+          'device': device,
+          'timestamp': str(int(time.time()))}
 
 # Values to be changed in experiments
 param_grid = {'encoder_str': ['gcn', 'mlp'],
