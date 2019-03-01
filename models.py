@@ -248,10 +248,12 @@ class NodeClassifier(nn.Module):
 class InnerProductScore(nn.Module):
     def __init__(self):
         super(InnerProductScore, self).__init__()
+        # For compatibility with Skorch
+        self._ = nn.Parameter()
 
     def forward(self, emb):
         emb_a, emb_b = emb[0], emb[1]
-        score = torch.sum(emb_a * emb_b, dim=-1)
+        score = torch.sum(emb_a * emb_b, dim=-1, keepdim=True)
         return score
 
 
