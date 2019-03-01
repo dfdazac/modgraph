@@ -290,54 +290,6 @@ def score_link_prediction(labels, scores):
     return roc_auc_score(labels, scores), average_precision_score(labels, scores)
 
 
-def score_node_classification(features, z, p_labeled=0.1, n_repeat=1, seed=0,
-                              norm=False):
-    """
-    Train a classifier using the node embeddings as features and reports the performance.
-
-    Parameters
-    ----------
-    features : array-like, shape [N, L]
-        The features used to train the classifier, i.e. the node embeddings
-    z : array-like, shape [N]
-        The ground truth labels
-    p_labeled : float
-        Percentage of nodes to use for training the classifier
-    n_repeat : int
-        Number of times to repeat the experiment
-    norm
-
-    Returns
-    -------
-    f1_micro: float
-        F_1 Score (micro) averaged of n_repeat trials.
-    f1_micro : float
-        F_1 Score (macro) averaged of n_repeat trials.
-    """
-    lrcv = LogisticRegressionCV(cv=3, multi_class='multinomial', n_jobs=-1,
-                                max_iter=300, random_state=seed)
-
-    if norm:
-        features = normalize(features)
-
-    trace = []
-    for i in range(n_repeat):
-        sss = StratifiedShuffleSplit(n_splits=1, test_size=1 - p_labeled,
-                                     random_state=seed)
-        split_train, split_test = next(sss.split(features, z))
-
-        lrcv.fit(features[split_train], z[split_train])
-        predicted = lrcv.predict(features[split_test])
-
-        f1_micro = f1_score(z[split_test], predicted, average='micro')
-        f1_macro = f1_score(z[split_test], predicted, average='macro')
-        accuracy = accuracy_score(z[split_test], predicted)
-
-        trace.append((f1_micro, f1_macro, accuracy))
-
-    return np.array(trace).mean(0)
-
-
 def get_hops(A, K):
     """
     Calculates the K-hop neighborhoods of the nodes in a graph.
