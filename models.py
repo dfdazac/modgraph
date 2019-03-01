@@ -40,9 +40,9 @@ class MLPEncoder(nn.Module):
         return z
 
 
-class GraphEncoder(nn.Module):
+class GCNENcoder(nn.Module):
     def __init__(self, input_feat_dim, hidden_dims, *args):
-        super(GraphEncoder, self).__init__()
+        super(GCNENcoder, self).__init__()
 
         self.layers = nn.ModuleList([GCNConv(input_feat_dim, hidden_dims[0],
                                              bias=False),
@@ -243,3 +243,19 @@ class NodeClassifier(nn.Module):
         x = x.detach()
         x = self.linear(x)
         return torch.log_softmax(x, dim=-1)
+
+
+class BilinearLinkPredictor(nn.Module):
+    def __init__(self, emb_dim, dropout_rate):
+        super(BilinearLinkPredictor, self).__init__()
+
+        self.weight = nn.Parameter(torch.Tensor(emb_dim, emb_dim))
+        stdv = 1. / np.sqrt(self.weight.size(1))
+        self.weight.data.uniform_(-stdv, stdv)
+        self.dropout = nn.Dropout(dropout_rate)
+
+    def forward(self, emb_a, emb_b):
+        x_a = self.dropout(emb_a)
+        x_b = self.dropout(emb_b)
+        score = torch.sum(torch.matmul(x_a, self.weight) * x_b, dim=-1)
+        return score

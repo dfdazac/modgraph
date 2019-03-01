@@ -11,7 +11,7 @@ from sacred.observers import MongoObserver
 
 from utils import (score_link_prediction, sample_zero_entries, split_edges,
                    sample_edges, score_node_classification)
-from models import MLPEncoder, GraphEncoder, GAE, DGI, Node2Vec, G2G
+from models import MLPEncoder, GCNENcoder, GAE, DGI, Node2Vec, G2G
 
 
 def get_data(dataset_str):
@@ -72,7 +72,7 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, lr, epochs,
     if encoder_str == 'mlp':
         encoder_class = MLPEncoder
     elif encoder_str == 'gcn':
-        encoder_class = GraphEncoder
+        encoder_class = GCNENcoder
     else:
         raise ValueError(f'Unknown encoder {encoder_str}')
 
