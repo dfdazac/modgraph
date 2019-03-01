@@ -38,26 +38,34 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, lr, epochs,
     device = torch.device(device)
     data = get_data(dataset_str)
 
-    if link_prediction or method == 'gae':
+    resample_neg_edges = False
+    if not link_prediction and method == 'gae':
+        resample_neg_edges = True
         neg_edge_index = sample_zero_entries(data.edge_index, seed,
                                              samples_fraction=10)
-        add_self_connections = method == 'node2vec'
-        train_pos, val_pos, test_pos = split_edges(data.edge_index, seed,
-                                                   add_self_connections)
+        train_pos, val_pos, test_pos = split_edges(data.edge_index, seed)
+
         num_val, num_test = val_pos.shape[1], test_pos.shape[1]
         train_neg_all, val_neg, test_neg = split_edges(neg_edge_index, seed,
                                                        num_val=num_val,
                                                        num_test=num_test)
-        num_train = train_pos.shape[1]
-        train_neg = sample_edges(train_neg_all, num_train, seed)
-        resample_neg = True
+
+        train_neg = sample_edges(train_neg_all, n_samples=train_pos.shape[1],
+                                 seed=seed)
+    elif link_prediction:
+        neg_edge_index = sample_zero_entries(data.edge_index, seed)
+        add_self_connections = method == 'node2vec'
+        train_pos, val_pos, test_pos = split_edges(data.edge_index, seed,
+                                                   add_self_connections)
+        train_neg_all, val_neg, test_neg = split_edges(neg_edge_index, seed)
+        train_neg = train_neg_all
     else:
         neg_edge_index = sample_zero_entries(data.edge_index, seed)
         train_pos, val_pos, test_pos = data.edge_index, None, None
         train_neg_all, val_neg, test_neg = neg_edge_index, None, None
-        num_train = train_pos.shape[1]
         train_neg = train_neg_all
-        resample_neg = False
+
+    num_train = train_pos.shape[1]
 
     # Create model
     if method == 'dgi':
@@ -119,7 +127,7 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, lr, epochs,
                 print(log.format(epoch, epochs, loss.item()), end='',
                       flush=True)
 
-            if resample_neg:
+            if resample_neg_edges:
                 train_neg = sample_edges(train_neg_all,
                                          num_train, seed+epoch).to(device)
 
