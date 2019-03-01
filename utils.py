@@ -3,6 +3,8 @@ import scipy.sparse as sp
 import torch
 from sklearn.metrics import (roc_auc_score, average_precision_score,
                              accuracy_score, f1_score)
+from sklearn.model_selection import StratifiedShuffleSplit
+from sklearn.linear_model import LogisticRegressionCV
 
 
 def score_link_prediction(emb, edges_pos, edges_neg):
@@ -208,8 +210,7 @@ def sample_edges(edge_index, n_samples, seed):
     return edge_index[:, rand_idx]
 
 
-def score_node_classification(features, z, p_labeled=0.1, n_repeat=1, seed=0,
-                              norm=False):
+def score_node_classification(features, z, p_labeled=0.1, n_repeat=1, seed=0):
     """
     Train a classifier using the node embeddings as features and reports the performance.
 
@@ -234,9 +235,6 @@ def score_node_classification(features, z, p_labeled=0.1, n_repeat=1, seed=0,
     """
     lrcv = LogisticRegressionCV(cv=3, multi_class='multinomial', n_jobs=-1,
                                 max_iter=300, random_state=seed)
-
-    if norm:
-        features = normalize(features)
 
     trace = []
     for i in range(n_repeat):
