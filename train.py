@@ -30,7 +30,30 @@ def get_data(dataset_str):
 
 def train_encoder(dataset_str, method, encoder_str, dimensions, lr, epochs,
                   rec_weight, device_str, link_prediction=False, seed=0,
-                  ckpt_name=None):
+                  ckpt_name=None, edge_score='inner'):
+    if encoder_str == 'mlp':
+        encoder_class = MLPEncoder
+    elif encoder_str == 'gcn':
+        encoder_class = GCNENcoder
+    else:
+        raise ValueError(f'Unknown encoder {encoder_str}')
+
+    if method == 'dgi':
+        model_class = DGI
+    elif method == 'gae':
+        model_class = GAE
+    elif method in ['node2vec', 'graph2gauss']:
+        model_class = None
+    else:
+        raise ValueError(f'Unknown model {method}')
+
+    if edge_score == 'inner':
+        score_class = InnerProductScore
+    elif edge_score == 'bilinear':
+        score_class = BilinearScore
+    else:
+        raise ValueError(f'Unknown edge score {edge_score}')
+
     if not torch.cuda.is_available() and device_str.startswith('cuda'):
         raise ValueError(f'Device {device_str} specified '
                          'but CUDA is not available')
@@ -66,23 +89,6 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, lr, epochs,
         train_neg = train_neg_all
 
     num_train = train_pos.shape[1]
-
-    # Create model
-    if method == 'dgi':
-        model_class = DGI
-    elif method == 'gae':
-        model_class = GAE
-    elif method in ['node2vec', 'graph2gauss']:
-        model_class = None
-    else:
-        raise ValueError(f'Unknown model {method}')
-
-    if encoder_str == 'mlp':
-        encoder_class = MLPEncoder
-    elif encoder_str == 'gcn':
-        encoder_class = GCNENcoder
-    else:
-        raise ValueError(f'Unknown encoder {encoder_str}')
 
     if method in ['gae', 'dgi']:
         data.x = data.x.to(device)
@@ -163,7 +169,7 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, lr, epochs,
             test_neg = test_neg.to(device)
             train_val_pos = torch.cat((train_pos, val_pos.to(device)), dim=-1)
             train_val_neg = torch.cat((train_neg, val_neg.to(device)), dim=-1)
-            auc, ap = score_link_prediction(InnerProductScore, embeddings,
+            auc, ap = score_link_prediction(score_class, embeddings,
                                             test_pos, test_neg, device_str,
                                             train_val_pos, train_val_neg)
 
@@ -197,6 +203,7 @@ def config():
     n_exper = 20
     device = 'cuda'
     timestamp = str(int(time.time()))
+    edge_score = 'inner'
 
 
 @ex.capture
@@ -223,8 +230,8 @@ def log_statistics(results, metrics, timestamp, _run):
 
 @ex.command
 def link_pred_experiments(dataset_str, method, encoder_str, hidden_dims,
-                          rec_weight, lr, epochs, n_exper, device, timestamp,
-                          _run):
+                          rec_weight, edge_score, lr, epochs, n_exper, device,
+                          timestamp, _run):
     torch.random.manual_seed(0)
     np.random.seed(0)
     results = np.empty([n_exper, 2])
@@ -234,7 +241,8 @@ def link_pred_experiments(dataset_str, method, encoder_str, hidden_dims,
         encoder, scores = train_encoder(dataset_str, method, encoder_str,
                                         hidden_dims, lr, epochs, rec_weight,
                                         device, seed=i, link_prediction=True,
-                                        ckpt_name=timestamp)
+                                        ckpt_name=timestamp,
+                                        edge_score=edge_score)
         results[i] = scores
 
     log_statistics(results, ['AUC', 'AP'])
