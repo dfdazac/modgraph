@@ -1,7 +1,6 @@
 import numpy as np
 import scipy.sparse as sp
 import torch
-import torch.nn as nn
 from sklearn.metrics import (roc_auc_score, average_precision_score,
                              accuracy_score, f1_score)
 from sklearn.model_selection import StratifiedShuffleSplit
@@ -228,8 +227,8 @@ def score_link_prediction(score_class, emb, test_pos, test_neg,
 
     return auc_score, ap_score
 
-# TODO: remove n_repeat
-def score_node_classification(features, z, p_labeled=0.1, n_repeat=1, seed=0):
+
+def score_node_classification(features, z, p_labeled=0.1, seed=0):
     """
     Train a classifier using the node embeddings as features and reports the performance.
 
@@ -255,19 +254,15 @@ def score_node_classification(features, z, p_labeled=0.1, n_repeat=1, seed=0):
     lrcv = LogisticRegressionCV(cv=3, multi_class='multinomial', n_jobs=-1,
                                 max_iter=300, random_state=seed)
 
-    trace = []
-    for i in range(n_repeat):
-        sss = StratifiedShuffleSplit(n_splits=1, test_size=1 - p_labeled,
-                                     random_state=seed)
-        split_train, split_test = next(sss.split(features, z))
+    sss = StratifiedShuffleSplit(n_splits=1, test_size=1 - p_labeled,
+                                 random_state=seed)
+    split_train, split_test = next(sss.split(features, z))
 
-        lrcv.fit(features[split_train], z[split_train])
-        predicted = lrcv.predict(features[split_test])
+    lrcv.fit(features[split_train], z[split_train])
+    predicted = lrcv.predict(features[split_test])
 
-        f1_micro = f1_score(z[split_test], predicted, average='micro')
-        f1_macro = f1_score(z[split_test], predicted, average='macro')
-        accuracy = accuracy_score(z[split_test], predicted)
+    f1_micro = f1_score(z[split_test], predicted, average='micro')
+    f1_macro = f1_score(z[split_test], predicted, average='macro')
+    accuracy = accuracy_score(z[split_test], predicted)
 
-        trace.append((f1_micro, f1_macro, accuracy))
-
-    return np.array(trace).mean(0)
+    return f1_micro, f1_macro, accuracy
