@@ -3,9 +3,10 @@ import scipy.sparse as sp
 import torch
 from sklearn.metrics import (roc_auc_score, average_precision_score,
                              accuracy_score, f1_score)
-from sklearn.model_selection import StratifiedShuffleSplit
+from sklearn.model_selection import StratifiedShuffleSplit, GridSearchCV
 from sklearn.linear_model import LogisticRegressionCV
 from skorch.classifier import NeuralNetBinaryClassifier
+from skorch import NeuralNetClassifier
 
 
 def sample_zero_entries(edge_index, seed, samples_fraction=1.0):
@@ -185,15 +186,15 @@ def sample_edges(edge_index, n_samples, seed):
 
 def build_data(emb, edges_pos, edges_neg):
     # Tensors on device
-    pairs_pos = torch.stack((emb[edges_pos[0]], emb[edges_pos[1]]))
-    pairs_neg = torch.stack((emb[edges_neg[0]], emb[edges_neg[1]]))
-    pairs = torch.cat((pairs_pos, pairs_neg), dim=1)
+    pairs_pos = torch.stack((emb[edges_pos[0]], emb[edges_pos[1]]), dim=1)
+    pairs_neg = torch.stack((emb[edges_neg[0]], emb[edges_neg[1]]), dim=1)
+    pairs = torch.cat((pairs_pos, pairs_neg), dim=0)
 
     # Tensors on CPU
     labels_pos = torch.ones(edges_pos.shape[1], dtype=torch.float32)
     labels_neg = torch.zeros(edges_neg.shape[1], dtype=torch.float32)
     labels = torch.cat((labels_pos, labels_neg), dim=-1)
-    return pairs, labels
+    return pairs.numpy(), labels.numpy()
 
 
 def score_link_prediction(score_class, emb, test_pos, test_neg,
@@ -211,13 +212,22 @@ def score_link_prediction(score_class, emb, test_pos, test_neg,
         auc_score, float
         ap_score, float
     """
-    #model = score_class().to(device)
-    model = NeuralNetBinaryClassifier(score_class, device=device_str)
+    emb_dim = emb.shape[1]
     if train_pos is None or train_neg is None:
+        model = NeuralNetBinaryClassifier(score_class, module__emb_dim=emb_dim,
+                                          device=device_str, batch_size=-1)
         model.initialize()
     else:
-        # Train model
-        model.initialize()
+        model = NeuralNetBinaryClassifier(score_class, module__emb_dim=emb_dim,
+                                          device=device_str, max_epochs=10, batch_size=-1)
+        params = {
+            'lr': [0.1]
+        }
+        gs = GridSearchCV(model, params, refit=True, cv=2, scoring='accuracy')
+
+        X, targets = build_data(emb, train_pos, train_neg)
+        gs.fit(X, targets)
+        model = gs
 
     X, targets = build_data(emb, test_pos, test_neg)
     preds = model.predict_proba(X)

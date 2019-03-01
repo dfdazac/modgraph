@@ -246,27 +246,28 @@ class NodeClassifier(nn.Module):
 
 
 class InnerProductScore(nn.Module):
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
         super(InnerProductScore, self).__init__()
         # For compatibility with Skorch
         self._ = nn.Parameter()
 
     def forward(self, emb):
-        emb_a, emb_b = emb[0], emb[1]
-        score = torch.sum(emb_a * emb_b, dim=-1, keepdim=True)
+        emb_a, emb_b = emb[:, 0], emb[:, 1]
+        score = torch.sum(emb_a * emb_b, dim=-1)
         return score
 
 
 class BilinearScore(nn.Module):
-    def __init__(self, emb_dim, dropout_rate):
+    def __init__(self, emb_dim):
         super(BilinearScore, self).__init__()
 
         self.weight = nn.Parameter(torch.Tensor(emb_dim, emb_dim))
         stdv = 1. / np.sqrt(self.weight.size(1))
         self.weight.data.uniform_(-stdv, stdv)
-        self.dropout = nn.Dropout(dropout_rate)
+        self.dropout = nn.Dropout(0.5)
 
-    def forward(self, emb_a, emb_b):
+    def forward(self, emb):
+        emb_a, emb_b = emb[:, 0], emb[:, 1]
         x_a = self.dropout(emb_a)
         x_b = self.dropout(emb_b)
         score = torch.sum(torch.matmul(x_a, self.weight) * x_b, dim=-1)

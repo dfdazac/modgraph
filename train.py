@@ -164,11 +164,16 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, lr, epochs,
             auc, ap = model.test_auc, model.test_ap
         else:
             model.eval()
-            embeddings = model.encoder(data, train_pos)#.cpu().detach()
-            test_pos = test_pos.to(device)
-            test_neg = test_neg.to(device)
-            train_val_pos = torch.cat((train_pos, val_pos.to(device)), dim=-1)
-            train_val_neg = torch.cat((train_neg, val_neg.to(device)), dim=-1)
+            embeddings = model.encoder(data, train_pos).cpu().detach()
+
+            train_pos = train_pos.cpu()
+            train_neg = train_neg.cpu()
+            if score_class is not InnerProductScore:
+                train_val_pos = torch.cat((train_pos, val_pos), dim=-1)
+                train_val_neg = torch.cat((train_neg, val_neg), dim=-1)
+            else:
+                train_val_pos, train_val_neg = None, None
+
             auc, ap = score_link_prediction(score_class, embeddings,
                                             test_pos, test_neg, device_str,
                                             train_val_pos, train_val_neg)
@@ -203,7 +208,7 @@ def config():
     n_exper = 20
     device = 'cuda'
     timestamp = str(int(time.time()))
-    edge_score = 'inner'
+    edge_score = 'bilinear'
 
 
 @ex.capture
