@@ -245,9 +245,19 @@ class NodeClassifier(nn.Module):
         return torch.log_softmax(x, dim=-1)
 
 
-class BilinearLinkPredictor(nn.Module):
+class InnerProductScore(nn.Module):
+    def __init__(self):
+        super(InnerProductScore, self).__init__()
+
+    def forward(self, emb):
+        emb_a, emb_b = emb[0], emb[1]
+        score = torch.sum(emb_a * emb_b, dim=-1)
+        return score
+
+
+class BilinearScore(nn.Module):
     def __init__(self, emb_dim, dropout_rate):
-        super(BilinearLinkPredictor, self).__init__()
+        super(BilinearScore, self).__init__()
 
         self.weight = nn.Parameter(torch.Tensor(emb_dim, emb_dim))
         stdv = 1. / np.sqrt(self.weight.size(1))
