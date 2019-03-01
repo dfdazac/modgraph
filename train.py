@@ -10,9 +10,8 @@ from sacred import Experiment
 from sacred.observers import MongoObserver
 
 from utils import (score_link_prediction, sample_zero_entries, split_edges,
-                   sample_edges)
+                   sample_edges, score_node_classification)
 from models import MLPEncoder, GraphEncoder, GAE, DGI, Node2Vec, G2G
-from g2g.utils import score_node_classification
 
 
 def get_data(dataset_str):
