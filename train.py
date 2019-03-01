@@ -11,7 +11,7 @@ from sacred.observers import MongoObserver
 
 from utils import (score_link_prediction, sample_zero_entries, split_edges,
                    sample_edges, score_node_classification)
-from models import MLPEncoder, GCNENcoder, GAE, DGI, Node2Vec, G2G
+from models import MLPEncoder, GCNENcoder, GAE, DGI, Node2Vec, G2G, InnerProductScore, BilinearScore
 
 
 def get_data(dataset_str):
@@ -29,13 +29,13 @@ def get_data(dataset_str):
 
 
 def train_encoder(dataset_str, method, encoder_str, dimensions, lr, epochs,
-                  rec_weight, device, link_prediction=False, seed=0,
+                  rec_weight, device_str, link_prediction=False, seed=0,
                   ckpt_name=None):
-    if not torch.cuda.is_available() and device.startswith('cuda'):
-        raise ValueError(f'Device {device} specified '
+    if not torch.cuda.is_available() and device_str.startswith('cuda'):
+        raise ValueError(f'Device {device_str} specified '
                          'but CUDA is not available')
 
-    device = torch.device(device)
+    device = torch.device(device_str)
     data = get_data(dataset_str)
 
     resample_neg_edges = False
@@ -109,7 +109,8 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, lr, epochs,
             if link_prediction or method == 'gae':
                 # Evaluate on val edges
                 embeddings = model.encoder(data, train_pos).cpu().detach()
-                auc, ap = score_link_prediction(embeddings, val_pos, val_neg)
+                auc, ap = score_link_prediction(InnerProductScore, embeddings,
+                                                val_pos, val_neg, device_str)
 
                 if auc > best_auc:
                     # Keep best model on val set
@@ -157,8 +158,14 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, lr, epochs,
             auc, ap = model.test_auc, model.test_ap
         else:
             model.eval()
-            embeddings = model.encoder(data, train_pos).cpu().detach()
-            auc, ap = score_link_prediction(embeddings, test_pos, test_neg)
+            embeddings = model.encoder(data, train_pos)#.cpu().detach()
+            test_pos = test_pos.to(device)
+            test_neg = test_neg.to(device)
+            train_val_pos = torch.cat((train_pos, val_pos.to(device)), dim=-1)
+            train_val_neg = torch.cat((train_neg, val_neg.to(device)), dim=-1)
+            auc, ap = score_link_prediction(InnerProductScore, embeddings,
+                                            test_pos, test_neg, device_str,
+                                            train_val_pos, train_val_neg)
 
         print('test_auc: {:6f}, test_ap: {:6f}'.format(auc, ap))
     else:
@@ -180,7 +187,7 @@ else:
 @ex.config
 def config():
     dataset_str = 'cora'
-    method = 'gae'
+    method = 'dgi'
     encoder_str = 'gcn'
     hidden_dims = [256, 128]
     rec_weight = 0
