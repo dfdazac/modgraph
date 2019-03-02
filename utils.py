@@ -215,15 +215,18 @@ def score_link_prediction(score_class, emb, test_pos, test_neg,
     emb_dim = emb.shape[1]
     if train_pos is None or train_neg is None:
         model = NeuralNetBinaryClassifier(score_class, module__emb_dim=emb_dim,
+                                          optimizer=torch.optim.Adam,
                                           device=device_str, batch_size=-1)
         model.initialize()
     else:
+        print('Training link prediction model')
         model = NeuralNetBinaryClassifier(score_class, module__emb_dim=emb_dim,
-                                          device=device_str, max_epochs=10, batch_size=-1)
+                                          device=device_str, max_epochs=10,
+                                          verbose=0)
         params = {
-            'lr': [0.1]
+            'lr': [0.00001]
         }
-        gs = GridSearchCV(model, params, refit=True, cv=2, scoring='accuracy')
+        gs = GridSearchCV(model, params, cv=3, scoring='accuracy')#, n_jobs=-1)
 
         X, targets = build_data(emb, train_pos, train_neg)
         gs.fit(X, targets)

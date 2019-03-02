@@ -264,7 +264,7 @@ class BilinearScore(nn.Module):
         self.weight = nn.Parameter(torch.Tensor(emb_dim, emb_dim))
         stdv = 1. / np.sqrt(self.weight.size(1))
         self.weight.data.uniform_(-stdv, stdv)
-        self.dropout = nn.Dropout(0.5)
+        self.dropout = nn.Dropout(0.3)
 
     def forward(self, emb):
         emb_a, emb_b = emb[:, 0], emb[:, 1]
