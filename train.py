@@ -176,7 +176,8 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, lr, epochs,
 
             auc, ap = score_link_prediction(score_class, embeddings,
                                             test_pos, test_neg, device_str,
-                                            train_val_pos, train_val_neg)
+                                            train_val_pos, train_val_neg,
+                                            seed)
 
         print('test_auc: {:6f}, test_ap: {:6f}'.format(auc, ap))
     else:
