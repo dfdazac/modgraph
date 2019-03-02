@@ -3,7 +3,7 @@ import scipy.sparse as sp
 import torch
 from sklearn.metrics import (roc_auc_score, average_precision_score,
                              accuracy_score, f1_score)
-from sklearn.model_selection import StratifiedShuffleSplit, GridSearchCV
+from sklearn.model_selection import StratifiedShuffleSplit, GridSearchCV, ShuffleSplit, PredefinedSplit
 from sklearn.linear_model import LogisticRegressionCV
 from skorch.classifier import NeuralNetBinaryClassifier
 from skorch import NeuralNetClassifier
@@ -198,7 +198,7 @@ def build_data(emb, edges_pos, edges_neg):
 
 
 def score_link_prediction(score_class, emb, test_pos, test_neg,
-                          device_str, train_pos=None, train_neg=None):
+                          device_str, train_pos=None, train_neg=None, seed=0):
     """Evaluate the AUC and AP scores when using the provided embeddings to
     predict links between nodes.
 
@@ -221,14 +221,20 @@ def score_link_prediction(score_class, emb, test_pos, test_neg,
     else:
         print('Training link prediction model')
         model = NeuralNetBinaryClassifier(score_class, module__emb_dim=emb_dim,
-                                          device=device_str, max_epochs=10,
+                                          device=device_str, max_epochs=20,
                                           verbose=0)
         params = {
-            'lr': [0.00001]
+            'lr': [1e-1, 1e-3, 1e-4]
         }
-        gs = GridSearchCV(model, params, cv=3, scoring='accuracy')#, n_jobs=-1)
-
         X, targets = build_data(emb, train_pos, train_neg)
+        shuffling = ShuffleSplit(n_splits=1, test_size=0.3, random_state=seed)
+        shuffling.get_n_splits(X, targets)
+        train_index, val_index = next(shuffling.split(X, targets))
+        val_fold = np.zeros(targets.shape, dtype=np.int)
+        val_fold[train_index] = -1
+        split = PredefinedSplit(test_fold=val_fold)
+
+        gs = GridSearchCV(model, params, cv=split, scoring='accuracy', n_jobs=3)
         gs.fit(X, targets)
         model = gs
 
