@@ -1,3 +1,6 @@
+import os.path as osp
+from torch_geometric.datasets import Planetoid
+from gnnbench import GNNBenchmark
 import numpy as np
 import scipy.sparse as sp
 import torch
@@ -6,17 +9,16 @@ from sklearn.metrics import (roc_auc_score, average_precision_score,
 from sklearn.model_selection import StratifiedShuffleSplit, GridSearchCV, ShuffleSplit, PredefinedSplit
 from sklearn.linear_model import LogisticRegressionCV
 from skorch.classifier import NeuralNetBinaryClassifier
-from skorch import NeuralNetClassifier
 
 
-def sample_zero_entries(edge_index, seed, samples_fraction=1.0):
+def sample_zero_entries(edge_index, seed, sample_mult=1.0):
     """Obtain zero entries from a sparse matrix.
 
     Args:
         edge_index (tensor): (2, N), N is the number of edges.
         seed (int): to control randomness
-        samples_fraction (float): the number of edges sampled is
-            N * samples_fraction.
+        sample_mult (float): the number of edges sampled is
+            N * sample_mult.
 
     Returns:
         torch.tensor, (2, N) containing zero entries
@@ -25,7 +27,7 @@ def sample_zero_entries(edge_index, seed, samples_fraction=1.0):
 
     np.random.seed(seed)
     # Number of edges in both directions must be even
-    n_samples = int(np.ceil(samples_fraction * n_edges/2) * 2)
+    n_samples = int(np.ceil(sample_mult * n_edges / 2) * 2)
     adjacency = adj_from_edge_index(edge_index)
     zero_entries = np.zeros([2, n_samples], dtype=np.int32)
     nonzero_or_sampled = set(zip(*adjacency.nonzero()))
@@ -285,3 +287,42 @@ def score_node_classification(features, z, p_labeled=0.1, seed=0):
     accuracy = accuracy_score(z[split_test], predicted)
 
     return f1_micro, f1_macro, accuracy
+
+
+def get_data(dataset_str):
+    path = osp.join(osp.dirname(osp.realpath(__file__)), 'data', dataset_str)
+
+    if dataset_str in ('cora', 'citeseer', 'pubmed'):
+        dataset = Planetoid(path, dataset_str)
+    elif dataset_str in ('corafull', 'coauthorcs', 'coauthorphys',
+                         'amazoncomp', 'amazonphoto'):
+        dataset = GNNBenchmark(path, dataset_str)
+    else:
+        raise ValueError(f'Unknown dataset {dataset_str}')
+
+    return dataset[0]
+
+
+def get_data_splits(dataset_str, neg_sample_mult, link_prediction,
+                    add_self_connections=False, seed=0):
+    data = get_data(dataset_str)
+    neg_edge_index = sample_zero_entries(data.edge_index, seed,
+                                         neg_sample_mult)
+
+    if link_prediction:
+        # For link prediction we split positive edges
+        train_pos, val_pos, test_pos = split_edges(data.edge_index, seed,
+                                                   add_self_connections)
+
+        num_val, num_test = val_pos.shape[1], test_pos.shape[1]
+        train_neg_all, val_neg, test_neg = split_edges(neg_edge_index, seed,
+                                                   num_val=num_val,
+                                                   num_test=num_test)
+    else:
+        train_pos, val_pos, test_pos = data.edge_index, None, None
+        train_neg_all, val_neg, test_neg = neg_edge_index, None, None
+
+    pos_split = [train_pos, val_pos, test_pos]
+    neg_split = [train_neg_all, val_neg, test_neg]
+
+    return data, pos_split, neg_split

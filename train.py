@@ -4,28 +4,12 @@ import time
 
 import torch
 import numpy as np
-from torch_geometric.datasets import Planetoid
-from gnnbench import GNNBenchmark
 from sacred import Experiment
 from sacred.observers import MongoObserver
 
-from utils import (score_link_prediction, sample_zero_entries, split_edges,
+from utils import (score_link_prediction, get_data, get_data_splits,
                    sample_edges, score_node_classification)
 from models import MLPEncoder, GCNENcoder, GAE, DGI, Node2Vec, G2G, InnerProductScore, BilinearScore
-
-
-def get_data(dataset_str):
-    path = osp.join(osp.dirname(osp.realpath(__file__)), 'data', dataset_str)
-
-    if dataset_str in ('cora', 'citeseer', 'pubmed'):
-        dataset = Planetoid(path, dataset_str)
-    elif dataset_str in ('corafull', 'coauthorcs', 'coauthorphys',
-                         'amazoncomp', 'amazonphoto'):
-        dataset = GNNBenchmark(path, dataset_str)
-    else:
-        raise ValueError(f'Unknown dataset {dataset_str}')
-
-    return dataset[0]
 
 
 def train_encoder(dataset_str, method, encoder_str, dimensions, lr, epochs,
@@ -59,37 +43,28 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, lr, epochs,
                          'but CUDA is not available')
 
     device = torch.device(device_str)
-    data = get_data(dataset_str)
 
-    resample_neg_edges = False
+    # Load and split data
     if not link_prediction and method == 'gae':
+        neg_sample_mult = 10
         resample_neg_edges = True
-        neg_edge_index = sample_zero_entries(data.edge_index, seed,
-                                             samples_fraction=10)
-        train_pos, val_pos, test_pos = split_edges(data.edge_index, seed)
-
-        num_val, num_test = val_pos.shape[1], test_pos.shape[1]
-        train_neg_all, val_neg, test_neg = split_edges(neg_edge_index, seed,
-                                                       num_val=num_val,
-                                                       num_test=num_test)
-
-        train_neg = sample_edges(train_neg_all, n_samples=train_pos.shape[1],
-                                 seed=seed)
-    elif link_prediction:
-        neg_edge_index = sample_zero_entries(data.edge_index, seed)
-        add_self_connections = method == 'node2vec'
-        train_pos, val_pos, test_pos = split_edges(data.edge_index, seed,
-                                                   add_self_connections)
-        train_neg_all, val_neg, test_neg = split_edges(neg_edge_index, seed)
-        train_neg = train_neg_all
     else:
-        neg_edge_index = sample_zero_entries(data.edge_index, seed)
-        train_pos, val_pos, test_pos = data.edge_index, None, None
-        train_neg_all, val_neg, test_neg = neg_edge_index, None, None
+        neg_sample_mult = 1
+        resample_neg_edges = False
+
+    add_self_connections = method == 'node2vec'
+    data, pos_split, neg_split = get_data_splits(dataset_str, neg_sample_mult,
+                                                 link_prediction,
+                                                 add_self_connections, seed)
+    train_pos, val_pos, test_pos = pos_split
+    train_neg_all, val_neg, test_neg = neg_split
+    num_train = train_pos.shape[1]
+    if resample_neg_edges:
+        train_neg = sample_edges(train_neg_all, num_train, seed).to(device)
+    else:
         train_neg = train_neg_all
 
-    num_train = train_pos.shape[1]
-
+    # Train model
     if method in ['gae', 'dgi']:
         data.x = data.x.to(device)
         train_pos = train_pos.to(device)
