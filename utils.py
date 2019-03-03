@@ -190,6 +190,34 @@ def sample_edges(edge_index, n_samples, seed):
     return edge_index[:, rand_idx]
 
 
+def inner_product_scores(emb, edges_pos, edges_neg):
+    """Evaluate the AUC and AP scores when using the provided embeddings to
+    predict links between nodes.
+
+    Args:
+        emb: tensor of shape (N, d) where N is the number of nodes and d
+            the dimension of the embeddings.
+        edges_pos, edges_neg: tensors of shape (2, p) containing positive
+        and negative edges, respectively, in their columns.
+
+    Returns:
+        auc_score, float
+        ap_score, float
+    """
+    # Get scores for edges using inner product
+    pos_score = (emb[edges_pos[0]] * emb[edges_pos[1]]).sum(dim=1)
+    neg_score = (emb[edges_neg[0]] * emb[edges_neg[1]]).sum(dim=1)
+    preds = torch.cat((pos_score, neg_score)).cpu().numpy()
+
+    targets = torch.cat((torch.ones_like(pos_score),
+                         torch.zeros_like(neg_score))).cpu().numpy()
+
+    auc_score = roc_auc_score(targets, preds)
+    ap_score = average_precision_score(targets, preds)
+
+    return auc_score, ap_score
+
+
 def build_data(emb, edges_pos, edges_neg):
     # Tensors on device
     pairs_pos = torch.stack((emb[edges_pos[0]], emb[edges_pos[1]]), dim=1)
@@ -314,7 +342,7 @@ def get_data_splits(dataset_str, neg_sample_mult, link_prediction,
                                          neg_sample_mult)
 
     if link_prediction:
-        # For link prediction we split positive edges
+        # For link prediction we split edges in train/val/test sets
         train_pos, val_pos, test_pos = split_edges(data.edge_index, seed,
                                                    add_self_connections)
 

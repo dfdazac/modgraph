@@ -7,8 +7,9 @@ import numpy as np
 from sacred import Experiment
 from sacred.observers import MongoObserver
 
-from utils import (score_link_prediction, get_data, get_data_splits,
-                   sample_edges, score_node_classification)
+from utils import (get_data, get_data_splits, sample_edges,
+                   inner_product_scores, score_node_classification,
+                   score_link_prediction)
 from models import MLPEncoder, GCNENcoder, GAE, DGI, Node2Vec, G2G, InnerProductScore, BilinearScore
 
 
@@ -90,8 +91,7 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, lr, epochs,
             if link_prediction or method == 'gae':
                 # Evaluate on val edges
                 embeddings = model.encoder(data, train_pos).cpu().detach()
-                auc, ap = score_link_prediction(InnerProductScore, embeddings,
-                                                val_pos, val_neg, device_str)
+                auc, ap = inner_product_scores(embeddings, val_pos, val_neg)
 
                 if auc > best_auc:
                     # Keep best model on val set
@@ -183,7 +183,7 @@ def config():
     n_exper = 20
     device = 'cuda'
     timestamp = str(int(time.time()))
-    edge_score = 'bilinear'
+    edge_score = 'inner'
 
 
 @ex.capture
@@ -201,9 +201,7 @@ def log_statistics(results, metrics, timestamp, _run):
     print('Results')
 
     for i, m in enumerate(metrics):
-        print('{}: {:.1f} ± {:.2f}'.format(m,
-                                           mean[i] * 100,
-                                           std[i] * 100))
+        print('{}: {:.1f} ± {:.2f}'.format(m, mean[i] * 100, std[i] * 100))
         _run.log_scalar(f'{metrics[i]} mean', mean[i])
         _run.log_scalar(f'{metrics[i]} std', std[i])
 
