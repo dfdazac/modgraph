@@ -44,7 +44,7 @@ def sample_zero_entries(edge_index, seed, sample_mult=1.0):
             zero_entries[:, i] = t
             zero_entries[:, i+1] = t_rev
             i += 2
-            if i >= n_samples - 1:
+            if i == n_samples:
                 break
 
             nonzero_or_sampled.add(t)
@@ -80,8 +80,12 @@ def split_edges(edge_index, seed, add_self_connections=False,
     edges = np.array(adj_triu.nonzero()).T
     if num_test is None:
         num_test = int(np.floor(edges.shape[0] / 10.))
+    else:
+        num_test = num_test//2
     if num_val is None:
         num_val = int(np.floor(edges.shape[0] / 20.))
+    else:
+        num_val = num_val//2
 
     # Shuffle edges
     all_edge_idx = np.arange(edges.shape[0])
@@ -316,8 +320,8 @@ def get_data_splits(dataset_str, neg_sample_mult, link_prediction,
 
         num_val, num_test = val_pos.shape[1], test_pos.shape[1]
         train_neg_all, val_neg, test_neg = split_edges(neg_edge_index, seed,
-                                                   num_val=num_val,
-                                                   num_test=num_test)
+                                                       num_val=num_val,
+                                                       num_test=num_test)
     else:
         train_pos, val_pos, test_pos = data.edge_index, None, None
         train_neg_all, val_neg, test_neg = neg_edge_index, None, None
