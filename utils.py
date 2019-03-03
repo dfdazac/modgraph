@@ -9,6 +9,7 @@ from sklearn.metrics import (roc_auc_score, average_precision_score,
 from sklearn.model_selection import StratifiedShuffleSplit, GridSearchCV, ShuffleSplit, PredefinedSplit
 from sklearn.linear_model import LogisticRegressionCV
 from skorch.classifier import NeuralNetBinaryClassifier
+from skorch.callbacks import EarlyStopping
 
 
 def sample_zero_entries(edge_index, seed, sample_mult=1.0):
@@ -246,19 +247,24 @@ def score_link_prediction(score_class, emb, test_pos, test_neg,
         auc_score, float
         ap_score, float
     """
+    torch.random.manual_seed(seed)
+    np.random.seed(seed)
     emb_dim = emb.shape[1]
     if train_pos is None or train_neg is None:
         model = NeuralNetBinaryClassifier(score_class, module__emb_dim=emb_dim,
                                           optimizer=torch.optim.Adam,
-                                          device=device_str, batch_size=-1)
+                                          device=device_str, batch_size=128)
         model.initialize()
     else:
         print('Training link prediction model')
-        model = NeuralNetBinaryClassifier(score_class, module__emb_dim=emb_dim,
-                                          device=device_str, max_epochs=20,
-                                          verbose=0)
+        early_stopping = EarlyStopping(monitor='valid_acc', threshold=1e-3,
+                                       lower_is_better=False)
+        clf = NeuralNetBinaryClassifier(score_class, module__emb_dim=emb_dim,
+                                          device=device_str, max_epochs=50,
+                                          verbose=1, optimizer=torch.optim.Adam,
+                                          callbacks=[early_stopping])
         params = {
-            'lr': [1e-1, 1e-3, 1e-4]
+            'lr': [1e-1, 1e-2, 1e-3]
         }
         X, targets = build_data(emb, train_pos, train_neg)
         shuffling = ShuffleSplit(n_splits=1, test_size=0.3, random_state=seed)
@@ -268,9 +274,8 @@ def score_link_prediction(score_class, emb, test_pos, test_neg,
         val_fold[train_index] = -1
         split = PredefinedSplit(test_fold=val_fold)
 
-        gs = GridSearchCV(model, params, cv=split, scoring='accuracy', n_jobs=3)
-        gs.fit(X, targets)
-        model = gs
+        model = GridSearchCV(clf, params, cv=split, scoring='accuracy')
+        model.fit(X, targets)
 
     X, targets = build_data(emb, test_pos, test_neg)
     preds = model.predict_proba(X)
