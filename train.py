@@ -49,6 +49,8 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, lr, epochs,
     if not link_prediction and method == 'gae':
         neg_sample_mult = 10
         resample_neg_edges = True
+        # GAE objective is link prediction
+        link_prediction = True
     else:
         neg_sample_mult = 1
         resample_neg_edges = False
@@ -173,11 +175,11 @@ else:
 @ex.config
 def config():
     dataset_str = 'cora'
-    method = 'dgi'
+    method = 'gae'
     encoder_str = 'gcn'
     hidden_dims = [256, 128]
     rec_weight = 0
-    lr = 0.001
+    lr = 0.0001
     epochs = 200
     p_labeled = 0.1
     n_exper = 20
