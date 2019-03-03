@@ -158,14 +158,13 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, lr, epochs,
     else:
         raise ValueError
 
+    model.eval()
+    embeddings = model.encoder(data, train_pos).cpu().detach()
     if link_prediction:
         if method == 'graph2gauss':
             # graph2gauss link prediction is already evaluated with the KL div
             auc, ap = model.test_auc, model.test_ap
         else:
-            model.eval()
-            embeddings = model.encoder(data, train_pos).cpu().detach()
-
             train_pos = train_pos.cpu()
             train_neg = train_neg.cpu()
             if score_class is not InnerProductScore:
@@ -183,7 +182,7 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, lr, epochs,
     else:
         auc, ap = None, None
 
-    return model.encoder, np.array([auc, ap])
+    return embeddings, np.array([auc, ap])
 
 
 ex = Experiment()
@@ -244,11 +243,10 @@ def link_pred_experiments(dataset_str, method, encoder_str, hidden_dims,
     print('Experiment timestamp: ' + timestamp)
     for i in range(n_exper):
         print('\nTrial {:d}/{:d}'.format(i + 1, n_exper))
-        encoder, scores = train_encoder(dataset_str, method, encoder_str,
-                                        hidden_dims, lr, epochs, rec_weight,
-                                        device, seed=i, link_prediction=True,
-                                        ckpt_name=timestamp,
-                                        edge_score=edge_score)
+        _, scores = train_encoder(dataset_str, method, encoder_str,
+                                  hidden_dims, lr, epochs, rec_weight,
+                                  device, seed=i, link_prediction=True,
+                                  ckpt_name=timestamp, edge_score=edge_score)
         results[i] = scores
 
     log_statistics(results, ['AUC', 'AP'])
@@ -264,16 +262,13 @@ def node_class_experiments(dataset_str, method, encoder_str, hidden_dims,
     print('Experiment timestamp: ' + timestamp)
     for i in range(n_exper):
         print('\nTrial {:d}/{:d}'.format(i + 1, n_exper))
-        encoder, _ = train_encoder(dataset_str, method, encoder_str,
+        embeddings, _ = train_encoder(dataset_str, method, encoder_str,
                                    hidden_dims, lr, epochs, rec_weight,
                                    device, seed=i, ckpt_name=timestamp)
 
         data = get_data(dataset_str)
-        encoder.to(torch.device('cpu'))
-        features = encoder(data, data.edge_index,
-                           corrupt=False).detach().numpy()
         labels = data.y.cpu().numpy()
-        scores = score_node_classification(features, labels, p_labeled, seed=i)
+        scores = score_node_classification(embeddings, labels, p_labeled, seed=i)
         test_acc = scores[2]
         print('test_acc: {:.6f}'.format(test_acc))
         results[i] = test_acc

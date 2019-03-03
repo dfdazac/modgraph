@@ -2,14 +2,15 @@ import os
 
 from pymongo import MongoClient
 from matplotlib import rcParams
-rcParams['font.family'] = 'sans-serif'
-rcParams['font.sans-serif'] = ['Helvetica Neue']
 import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.manifold import TSNE
-import torch
 
-from train import get_dataset, train_encoder
+from train import get_data, train_encoder
+
+rcParams['font.family'] = 'sans-serif'
+rcParams['font.sans-serif'] = ['Helvetica Neue']
+
 
 def get_database():
     """Get a MongoDB database using credentials in environment variables """
@@ -72,7 +73,7 @@ def plot_label_rate(model2ids, dataset):
                                          id_low, id_high, dataset)
         plt.plot(results[0], results[1], '.-', label=model,
                  linewidth=0.75)
-        #plt.fill_between(results[0], results[1] - results[2],
+        # plt.fill_between(results[0], results[1] - results[2],
         #                 results[1] + results[2], alpha=0.25)
 
     xticks = [i for i in range(2, np.max(results[0]) + 1, 4)]
@@ -92,17 +93,15 @@ plot_label_rate(model2ids, 'pubmed')
 
 
 def plot_embeddings(model_name, dataset_str):
-    _, encoder = train_encoder(model_name, 'cuda', dataset_str, [256, 128],
+    _, embeddings = train_encoder(model_name, 'cuda', dataset_str, [256, 128],
                                lr=0.001, epochs=2, random_splits=False,
                                rec_weight=0, encoder='gcn', seed=42,
                                train_examples_per_class=20,
                                val_examples_per_class=30)
 
-    dataset = get_dataset(dataset_str, train_examples_per_class=20,
+    data = get_data(dataset_str, train_examples_per_class=20,
                           val_examples_per_class=30)
-    data = dataset[0]
-    encoder.to(torch.device('cpu'))
-    embeddings = encoder(data, data.edge_index).numpy()
+    embeddings = embeddings.numpy()
 
     z = TSNE(n_components=2).fit_transform(embeddings)
     labels = data.y.numpy()

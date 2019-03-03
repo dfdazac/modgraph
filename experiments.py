@@ -38,7 +38,7 @@ param_grid = {'dataset_str': ['cora', 'citeseer', 'pubmed', 'corafull',
 
 grid = ParameterGrid(param_grid)
 
-for task in ['node_class_experiments']:
+for task in ['link_pred_experiments']:
     for i, hparams in enumerate(grid):
         print('Experiment configuration {:d}/{:d}'.format(i + 1, len(grid)))
         config.update(hparams)
