@@ -12,6 +12,7 @@ from utils import adj_from_edge_index
 from g2g.model import Graph2Gauss
 from g2g.utils import score_link_prediction
 
+
 class MLPEncoder(nn.Module):
     def __init__(self, input_feat_dim, hidden_dims, *args):
         super(MLPEncoder, self).__init__()
@@ -67,6 +68,28 @@ class GCNEncoder(nn.Module):
 
         return z
 
+
+class SGCEncoder(nn.Module):
+    def __init__(self, input_feat_dim, hidden_dims, *args):
+        super(SGCEncoder, self).__init__()
+
+        out_channels = hidden_dims[-1]
+        K = len(hidden_dims)
+        self.layer = SGConv(input_feat_dim, out_channels, K, cached=True,
+                            bias=True)
+
+    def forward(self, data, edge_index, corrupt=False):
+        if corrupt:
+            perm = torch.randperm(data.num_nodes)
+            x = data.x[perm]
+        else:
+            x = data.x
+
+        z = self.layer(x, edge_index)
+
+        return z
+
+
 class Discriminator(nn.Module):
     def __init__(self, hidden_dim):
         super(Discriminator, self).__init__()
@@ -81,8 +104,9 @@ class Discriminator(nn.Module):
         x = torch.matmul(x, torch.matmul(self.weight, summary))
         return x
 
+
 class DGI(nn.Module):
-    def __init__(self, emb_dim, encoder, *args):
+    def __init__(self, encoder, emb_dim, *args):
         super(DGI, self).__init__()
         self.encoder = encoder
         self.discriminator = Discriminator(emb_dim)
@@ -101,8 +125,9 @@ class DGI(nn.Module):
 
         return l1 + l2
 
+
 class GAE(nn.Module):
-    def __init__(self, emb_dim, encoder, *args):
+    def __init__(self, encoder, emb_dim, *args):
         super(GAE, self).__init__()
         self.encoder = encoder
         self.loss_fn = nn.BCEWithLogitsLoss()

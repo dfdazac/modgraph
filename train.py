@@ -10,8 +10,8 @@ from sacred.observers import MongoObserver
 from utils import (get_data, get_data_splits, sample_edges,
                    inner_product_scores, score_node_classification,
                    score_link_prediction)
-from models import (MLPEncoder, GCNEncoder, GAE, DGI, Node2Vec, G2G,
-                    InnerProductScore, BilinearScore)
+from models import (MLPEncoder, GCNEncoder, SGCEncoder, GAE, DGI, Node2Vec,
+                    G2G, InnerProductScore, BilinearScore)
 
 
 def train_encoder(dataset_str, method, encoder_str, dimensions, lr, epochs,
@@ -21,6 +21,8 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, lr, epochs,
         encoder_class = MLPEncoder
     elif encoder_str == 'gcn':
         encoder_class = GCNEncoder
+    elif encoder_str == 'sgc':
+        encoder_class = SGCEncoder
     else:
         raise ValueError(f'Unknown encoder {encoder_str}')
 
@@ -178,7 +180,7 @@ else:
 def config():
     dataset_str = 'cora'
     method = 'gae'
-    encoder_str = 'gcn'
+    encoder_str = 'sgc'
     hidden_dims = [256, 128]
     lr = 0.0001
     epochs = 200
