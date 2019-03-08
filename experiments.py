@@ -18,25 +18,27 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 # Configuration template
 config = {'dataset_str': None,
-          'method': 'dgi',
-          'encoder_str': 'gcn',
+          'method': None,
+          'encoder_str': 'sgc',
           'hidden_dims': [256, 128],
-          'lr': 1e-3,
+          'lr': None,
           'epochs': 200,
           'p_labeled': 0.1,
           'n_exper': 20,
           'device': device,
           'timestamp': str(int(time.time())),
-          'edge_score': 'bilinear'}
+          'edge_score': 'inner'}
 
 # Values to be changed in experiments
-param_grid = {'dataset_str': ['cora', 'citeseer', 'pubmed', 'corafull',
+param_grid = {'method': ['gae', 'dgi'],
+              'dataset_str': ['cora', 'citeseer', 'pubmed', 'corafull',
                               'coauthorcs', 'coauthorphys', 'amazoncomp',
-                              'amazonphoto']}
+                              'amazonphoto'],
+              'lr': [1e-3, 1e-4, 1e-5]}
 
 grid = ParameterGrid(param_grid)
 
-for task in ['link_pred_experiments']:
+for task in ['link_pred_experiments', 'node_class_experiments']:
     for i, hparams in enumerate(grid):
         print('Experiment configuration {:d}/{:d}'.format(i + 1, len(grid)))
         config.update(hparams)
