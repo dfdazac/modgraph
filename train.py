@@ -66,7 +66,7 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, lr, epochs,
     train_neg_all, val_neg, test_neg = neg_split
     num_train = train_pos.shape[1]
     if resample_neg_edges:
-        train_neg = sample_edges(train_neg_all, num_train, seed).to(device)
+        train_neg = sample_edges(train_neg_all, num_train, seed)
     else:
         train_neg = train_neg_all
 
@@ -178,12 +178,12 @@ else:
 
 @ex.config
 def config():
-    dataset_str = 'cora'
+    dataset_str = 'coauthorphys'
     method = 'gae'
     encoder_str = 'sgc'
     hidden_dims = [256, 128]
     lr = 0.0001
-    epochs = 200
+    epochs = 1
     p_labeled = 0.1
     n_exper = 20
     device = 'cuda'
