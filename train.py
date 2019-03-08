@@ -10,16 +10,17 @@ from sacred.observers import MongoObserver
 from utils import (get_data, get_data_splits, sample_edges,
                    inner_product_scores, score_node_classification,
                    score_link_prediction)
-from models import MLPEncoder, GCNENcoder, GAE, DGI, Node2Vec, G2G, InnerProductScore, BilinearScore
+from models import (MLPEncoder, GCNEncoder, GAE, DGI, Node2Vec, G2G,
+                    InnerProductScore, BilinearScore)
 
 
 def train_encoder(dataset_str, method, encoder_str, dimensions, lr, epochs,
-                  rec_weight, device_str, link_prediction=False, seed=0,
+                  device_str, link_prediction=False, seed=0,
                   ckpt_name=None, edge_score='inner'):
     if encoder_str == 'mlp':
         encoder_class = MLPEncoder
     elif encoder_str == 'gcn':
-        encoder_class = GCNENcoder
+        encoder_class = GCNEncoder
     else:
         raise ValueError(f'Unknown encoder {encoder_str}')
 
@@ -74,8 +75,9 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, lr, epochs,
         train_neg = train_neg.to(device)
 
         num_features = data.x.shape[1]
-        model = model_class(num_features, dimensions, encoder_class,
-                            rec_weight).to(device)
+        encoder = encoder_class(num_features, dimensions)
+        emb_dim = dimensions[-1]
+        model = model_class(encoder, emb_dim).to(device)
 
         # Train model
         if ckpt_name is None:
@@ -178,7 +180,6 @@ def config():
     method = 'gae'
     encoder_str = 'gcn'
     hidden_dims = [256, 128]
-    rec_weight = 0
     lr = 0.0001
     epochs = 200
     p_labeled = 0.1
@@ -210,7 +211,7 @@ def log_statistics(results, metrics, timestamp, _run):
 
 @ex.command
 def link_pred_experiments(dataset_str, method, encoder_str, hidden_dims,
-                          rec_weight, edge_score, lr, epochs, n_exper, device,
+                          edge_score, lr, epochs, n_exper, device,
                           timestamp, _run):
     torch.random.manual_seed(0)
     np.random.seed(0)
@@ -219,7 +220,7 @@ def link_pred_experiments(dataset_str, method, encoder_str, hidden_dims,
     for i in range(n_exper):
         print('\nTrial {:d}/{:d}'.format(i + 1, n_exper))
         _, scores = train_encoder(dataset_str, method, encoder_str,
-                                  hidden_dims, lr, epochs, rec_weight,
+                                  hidden_dims, lr, epochs,
                                   device, seed=i, link_prediction=True,
                                   ckpt_name=timestamp, edge_score=edge_score)
         results[i] = scores
@@ -229,7 +230,7 @@ def link_pred_experiments(dataset_str, method, encoder_str, hidden_dims,
 
 @ex.automain
 def node_class_experiments(dataset_str, method, encoder_str, hidden_dims,
-                           rec_weight, lr, epochs, p_labeled, n_exper, device,
+                           lr, epochs, p_labeled, n_exper, device,
                            timestamp, _run):
     torch.random.manual_seed(0)
     np.random.seed(0)
@@ -238,7 +239,7 @@ def node_class_experiments(dataset_str, method, encoder_str, hidden_dims,
     for i in range(n_exper):
         print('\nTrial {:d}/{:d}'.format(i + 1, n_exper))
         embeddings, _ = train_encoder(dataset_str, method, encoder_str,
-                                   hidden_dims, lr, epochs, rec_weight,
+                                   hidden_dims, lr, epochs,
                                    device, seed=i, ckpt_name=timestamp)
 
         data = get_data(dataset_str)

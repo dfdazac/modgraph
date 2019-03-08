@@ -245,6 +245,7 @@ def score_link_prediction(score_class, emb, test_pos, test_neg,
         edges_pos, edges_neg: tensors of shape (2, p) containing positive
         and negative edges, respectively, in their columns.
 
+
     Returns:
         auc_score, float
         ap_score, float
@@ -259,8 +260,8 @@ def score_link_prediction(score_class, emb, test_pos, test_neg,
         model.initialize()
     else:
         print('Training link prediction model')
-        early_stopping = EarlyStopping(monitor='valid_acc', patience=10,
-                                       threshold=1e-3, lower_is_better=False)
+        early_stopping = EarlyStopping(monitor='valid_acc', threshold=1e-3,
+                                       lower_is_better=False)
         net = NeuralNetBinaryClassifier(score_class, module__emb_dim=emb_dim,
                                         criterion=torch.nn.BCEWithLogitsLoss,
                                         device=device_str, max_epochs=50,

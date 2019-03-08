@@ -3,7 +3,7 @@ import os
 
 import torch
 import torch.nn as nn
-from torch_geometric.nn import GCNConv
+from torch_geometric.nn import GCNConv, SGConv
 from torch_geometric.nn.inits import glorot
 import numpy as np
 import scipy.sparse as sp
@@ -40,9 +40,9 @@ class MLPEncoder(nn.Module):
         return z
 
 
-class GCNENcoder(nn.Module):
+class GCNEncoder(nn.Module):
     def __init__(self, input_feat_dim, hidden_dims, *args):
-        super(GCNENcoder, self).__init__()
+        super(GCNEncoder, self).__init__()
 
         self.layers = nn.ModuleList([GCNConv(input_feat_dim, hidden_dims[0],
                                              bias=False),
@@ -82,10 +82,10 @@ class Discriminator(nn.Module):
         return x
 
 class DGI(nn.Module):
-    def __init__(self, input_dim, hidden_dims, encoder_class, *args):
+    def __init__(self, emb_dim, encoder, *args):
         super(DGI, self).__init__()
-        self.encoder = encoder_class(input_dim, hidden_dims)
-        self.discriminator = Discriminator(hidden_dims[-1])
+        self.encoder = encoder
+        self.discriminator = Discriminator(emb_dim)
         self.loss = nn.BCEWithLogitsLoss()
 
     def forward(self, data, edges_pos, edges_neg):
@@ -102,24 +102,10 @@ class DGI(nn.Module):
         return l1 + l2
 
 class GAE(nn.Module):
-    def __init__(self, input_feat_dim, hidden_dims, encoder_class, rec_weight=0):
+    def __init__(self, emb_dim, encoder, *args):
         super(GAE, self).__init__()
-        self.encoder = encoder_class(input_feat_dim, hidden_dims)
+        self.encoder = encoder
         self.loss_fn = nn.BCEWithLogitsLoss()
-
-        # Feature reconstruction objective using symmetric decoder
-        self.rec_weight = rec_weight
-        if rec_weight > 0:
-            modules = []
-            for i in range(len(hidden_dims) - 1, 0, -1):
-                modules.append(nn.Linear(hidden_dims[i], hidden_dims[i-1]))
-                modules.append(nn.ReLU())
-            modules.append(nn.Linear(hidden_dims[0], input_feat_dim))
-            modules.append(nn.ReLU())
-            self.decoder = nn.Sequential(*modules)
-            self.rec_loss = nn.MSELoss()
-        else:
-            self.rec_loss = None
 
     def forward(self, data, edges_pos, edges_neg):
         z = self.encoder(data, edges_pos)
@@ -131,10 +117,6 @@ class GAE(nn.Module):
         targets = torch.cat((torch.ones_like(pos_score),
                              torch.zeros_like(neg_score)))
         cost = self.loss_fn(preds, targets)
-
-        if self.rec_loss is not None:
-            reconstructions = self.decoder(z)
-            cost = self.rec_weight * self.rec_loss(reconstructions, data.x) + (1 - self.rec_weight) * cost
 
         return cost
 
