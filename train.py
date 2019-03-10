@@ -30,7 +30,7 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, lr, epochs,
         model_class = DGI
     elif method == 'gae':
         model_class = GAE
-    elif method in ['node2vec', 'graph2gauss']:
+    elif method in ['node2vec', 'graph2gauss', 'raw']:
         model_class = None
     else:
         raise ValueError(f'Unknown model {method}')
@@ -137,10 +137,14 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, lr, epochs,
                     train_pos, val_pos, val_neg, test_pos, test_neg, epochs,
                     lr, K=1, link_prediction=link_prediction)
     else:
-        raise ValueError
+        model = None
 
-    model.eval()
-    embeddings = model.encoder(data, train_pos).cpu().detach()
+    if method == 'raw':
+        embeddings = data.x
+    else:
+        model.eval()
+        embeddings = model.encoder(data, train_pos).cpu().detach()
+
     if link_prediction:
         if method == 'graph2gauss':
             # graph2gauss link prediction is already evaluated with the KL div
@@ -178,12 +182,12 @@ else:
 
 @ex.config
 def config():
-    dataset_str = 'coauthorphys'
-    method = 'gae'
-    encoder_str = 'sgc'
+    dataset_str = 'cora'
+    method = 'raw'
+    encoder_str = 'gcn'
     hidden_dims = [256, 128]
     lr = 0.0001
-    epochs = 1
+    epochs = 200
     p_labeled = 0.1
     n_exper = 20
     device = 'cuda'
