@@ -193,7 +193,18 @@ class Graph2Gauss:
         hop_neg = tf.stack([self.triplets[:, 0], self.triplets[:, 2]], 1)
         eng_pos = self.energy_fn(hop_pos)
         eng_neg = self.energy_fn(hop_neg)
+
         energy = tf.square(eng_pos) + tf.exp(-eng_neg)
+        #energy = eng_pos - tf.log(1 - tf.exp(-eng_neg) + 1e-8)
+
+        # eng_pos = self.energy_inner_score(hop_pos)
+        # eng_neg = self.energy_inner_score(hop_neg)
+        # energy = tf.concat([eng_pos, eng_neg], axis=0)
+        # ones = tf.ones_like(eng_pos)
+        # zeros = tf.zeros_like(eng_neg)
+        # labels = tf.concat([ones, zeros], axis=0)
+        # energy = tf.nn.sigmoid_cross_entropy_with_logits(labels=labels,
+        #                                                  logits=energy)
 
         if self.scale:
             self.loss = tf.reduce_mean(energy * self.scale_terms)
@@ -256,6 +267,11 @@ class Graph2Gauss:
         ij_mu = tf.gather(self.mu, pairs)
         dist = tf.reduce_sum(tf.square(ij_mu[:, 0] - ij_mu[:, 1]), 1)
         return dist
+
+    def energy_inner_score(self, pairs):
+        ij_mu = tf.gather(self.mu, pairs)
+        score = tf.reduce_sum(ij_mu[:, 0] * ij_mu[:, 1], 1)
+        return score
 
     def __dataset_generator(self, hops, scale_terms):
         """
