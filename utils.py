@@ -294,7 +294,7 @@ def score_link_prediction(score_class, emb, test_pos, test_neg,
     return auc_score, ap_score
 
 
-def score_node_classification(features, z, p_labeled=0.1, seed=0):
+def score_node_classification(features, targets, p_labeled=0.1, seed=0):
     """
     Train a classifier using the node embeddings as features and reports the performance.
 
@@ -302,7 +302,7 @@ def score_node_classification(features, z, p_labeled=0.1, seed=0):
     ----------
     features : array-like, shape [N, L]
         The features used to train the classifier, i.e. the node embeddings
-    z : array-like, shape [N]
+    targets : array-like, shape [N]
         The ground truth labels
     p_labeled : float
         Percentage of nodes to use for training the classifier
@@ -322,14 +322,14 @@ def score_node_classification(features, z, p_labeled=0.1, seed=0):
 
     sss = StratifiedShuffleSplit(n_splits=1, test_size=1 - p_labeled,
                                  random_state=seed)
-    split_train, split_test = next(sss.split(features, z))
+    split_train, split_test = next(sss.split(features, targets))
 
-    lrcv.fit(features[split_train], z[split_train])
+    lrcv.fit(features[split_train], targets[split_train])
     predicted = lrcv.predict(features[split_test])
 
-    f1_micro = f1_score(z[split_test], predicted, average='micro')
-    f1_macro = f1_score(z[split_test], predicted, average='macro')
-    accuracy = accuracy_score(z[split_test], predicted)
+    f1_micro = f1_score(targets[split_test], predicted, average='micro')
+    f1_macro = f1_score(targets[split_test], predicted, average='macro')
+    accuracy = accuracy_score(targets[split_test], predicted)
 
     return f1_micro, f1_macro, accuracy
 
