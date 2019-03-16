@@ -18,10 +18,10 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 # Configuration template
 config = {'dataset_str': None,
-          'method': 'dgi',
-          'encoder_str': 'gcn',
+          'method': 'gae',
+          'encoder_str': 'sgc',
           'hidden_dims': [256, 128],
-          'lr': 1e-3,
+          'lr': 1e-4,
           'epochs': 200,
           'p_labeled': None,
           'n_exper': 20,
