@@ -255,7 +255,7 @@ class Node2Vec(nn.Module):
 class G2G(nn.Module):
     def __init__(self, data, encoder, n_hidden, dim, train_ones, val_ones,
                  val_zeros, test_ones, test_zeros, epochs, lr, K,
-                 link_prediction, energy='kl'):
+                 link_prediction, energy='sqeuclidean'):
         super(G2G, self).__init__()
 
         train_ones = train_ones.cpu().numpy().T
