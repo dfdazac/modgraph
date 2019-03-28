@@ -21,7 +21,7 @@ config = {'dataset_str': None,
           'method': 'graph2gauss',
           'encoder_str': 'gcn',
           'hidden_dims': [256, 128],
-          'lr': 1e-3,
+          'lr': 1e-4,
           'epochs': 200,
           'p_labeled': None,
           'n_exper': 20,
@@ -30,12 +30,12 @@ config = {'dataset_str': None,
           'edge_score': 'inner'}
 
 # Values to be changed in experiments
-param_grid = {'dataset_str': ['cora'],
+param_grid = {'dataset_str': ['citeseer', 'pubmed'],
               'p_labeled': [0.02, 0.04, 0.06, 0.08, 0.1]}
 
 grid = ParameterGrid(param_grid)
 
-for task in ['link_pred_experiments', 'node_class_experiments']:
+for task in ['node_class_experiments']:
     for i, hparams in enumerate(grid):
         print('Experiment configuration {:d}/{:d}'.format(i + 1, len(grid)))
         config.update(hparams)
