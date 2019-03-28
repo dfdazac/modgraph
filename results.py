@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.manifold import TSNE
 
-#from train import get_data, train_encoder
+from train import get_data, train_encoder
 
 rcParams['font.family'] = 'sans-serif'
 rcParams['font.sans-serif'] = ['Helvetica Neue']
@@ -24,16 +24,17 @@ def get_database():
 
 def get_label_rate_results(database, model_name, timestamp, dataset):
     """Get accuracy results for a given model, with different label rates.
+
     Args:
-        - client: a MongoClient to connect with the database
-        - model_name: str
-        - id_low: int, lowest id (inclusive) to search for results
-        - id_high: int, highest id (inclusive) to search for results
-        - dataset: str, name of the dataset to get results for
+        client (MongoClient): to connect with the database
+        model_name (str): name of the dataset
+        timestamp (int): timestamp of the experiments
+        dataset (str): name of the dataset to get results for
+
     Return:
-        - p_labeled: ndarray, percentage of labeled nodes during training
-        - accuracies: ndarray
-        - stdevs: ndarray
+        p_labeled (ndarray): percentage of labeled nodes during training
+        accuracies (ndarray)
+        stdevs (ndarray)
     """
     runs = database['runs']
     metrics = database["metrics"]
