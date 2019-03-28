@@ -1,4 +1,5 @@
 import os
+from collections import OrderedDict
 
 from pymongo import MongoClient
 from matplotlib import rcParams
@@ -6,7 +7,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.manifold import TSNE
 
-from train import get_data, train_encoder
+#from train import get_data, train_encoder
+from utils import get_data, adj_from_edge_index
 
 rcParams['font.family'] = 'sans-serif'
 rcParams['font.sans-serif'] = ['Helvetica Neue']
@@ -96,6 +98,7 @@ def plot_label_rate(model2ids, dataset, plot_stdevs=False):
     plt.ylim([0.4, max_acc * 1.05])
     plt.show()
 
+
 def make_plots():
     model2ids = {'GAE': 1552760104,
                  'DGI': 1552739016,
@@ -111,6 +114,31 @@ def make_plots():
                  'DGI': 1552739016,
                  'graph2gauss': 1552822959}
     plot_label_rate(model2ids, 'pubmed')
+
+
+def dataset_boxplots():
+    datasets = OrderedDict({'amazonphoto': 'Amazon Photo',
+                            'amazoncomp': 'Amazon Computer',
+                            'coauthorphys': 'Coauthor Physics',
+                            'coauthorcs': 'Coauthor CS',
+                            'corafull': 'Cora Full',
+                            'pubmed': 'Pubmed',
+                            'citeseer': 'Citeseer',
+                            'cora': 'Cora'})
+    X = []
+    for dataset in datasets:
+        data = get_data(dataset)
+        adj = adj_from_edge_index(data.edge_index)
+        degrees = np.array(adj.sum(axis=0)).squeeze()
+        X.append(degrees)
+
+    plt.figure(figsize=(4, 3))
+    plt.boxplot(X, showfliers=False, vert=False)
+    plt.xlim([0, 95])
+    plt.yticks([i+1 for i in range(len(datasets))], datasets.values())
+    plt.xlabel('Node degree')
+    plt.tight_layout()
+    plt.show()
 
 
 # def plot_embeddings(model_name, dataset_str):
