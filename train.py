@@ -183,7 +183,7 @@ else:
 @ex.config
 def config():
     dataset_str = 'cora'
-    method = 'raw'
+    method = 'gae'
     encoder_str = 'gcn'
     hidden_dims = [256, 128]
     lr = 0.0001
