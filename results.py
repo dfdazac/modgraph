@@ -14,15 +14,12 @@ rcParams['font.sans-serif'] = ['Helvetica Neue']
 
 def get_database():
     """Get a MongoDB database using credentials in environment variables """
-    user = os.environ.get('MLAB_USR')
-    password = os.environ.get('MLAB_PWD')
+    uri = os.environ.get('MLAB_URI')
     database = os.environ.get('MLAB_DB')
-    if all([user, password, database]):
-        url = f'mongodb://{user}:{password}@ds135812.mlab.com:35812/{database}'
+    if all([uri, database]):
+        return MongoClient(uri)[database]
     else:
         raise ConnectionError('Check database environment variables')
-
-    return MongoClient(url)[database]
 
 
 def get_label_rate_results(database, model_name, id_low, id_high, dataset):
@@ -86,10 +83,10 @@ def plot_label_rate(model2ids, dataset):
     plt.ylim([0.4, 0.85])
     plt.show()
 
-model2ids = {'GAE': [267, 332],
-             'DGI': [267, 332],
-             'graph2gauss': [357, 389]}
-plot_label_rate(model2ids, 'pubmed')
+model2ids = {'GAE': 1552760104,
+             'DGI': 1552739016,
+             'G2G': 1552822242}
+plot_label_rate(model2ids, 'cora')
 
 
 def plot_embeddings(model_name, dataset_str):

@@ -47,12 +47,12 @@ class GCNEncoder(nn.Module):
 
         self.layers = nn.ModuleList([GCNConv(input_feat_dim, hidden_dims[0],
                                              bias=False),
-                                     nn.PReLU(hidden_dims[0])])
+                                     nn.ReLU()])
 
         for i in range(1, len(hidden_dims)):
             self.layers.append(GCNConv(hidden_dims[i - 1], hidden_dims[i],
                                        bias=False))
-            self.layers.append(nn.PReLU(hidden_dims[i]))
+            self.layers.append(nn.ReLU())
 
     def forward(self, data, edge_index, corrupt=False):
         if corrupt:
