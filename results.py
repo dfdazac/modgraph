@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.manifold import TSNE
 
-#from train import get_data, train_encoder
+from train import train_encoder
 from utils import get_data, adj_from_edge_index
 
 rcParams['font.family'] = 'sans-serif'
@@ -141,25 +141,29 @@ def dataset_boxplots():
     plt.show()
 
 
-# def plot_embeddings(model_name, dataset_str):
-#     _, embeddings = train_encoder(model_name, 'cuda', dataset_str, [256, 128],
-#                                lr=0.001, epochs=2, random_splits=False,
-#                                rec_weight=0, encoder='gcn', seed=42,
-#                                train_examples_per_class=20,
-#                                val_examples_per_class=30)
-#
-#     data = get_data(dataset_str, train_examples_per_class=20,
-#                           val_examples_per_class=30)
-#     embeddings = embeddings.numpy()
-#
-#     z = TSNE(n_components=2).fit_transform(embeddings)
-#     labels = data.y.numpy()
-#     n_labels = np.unique(labels).size
-#     plt.scatter(z[:, 0], z[:, 1], c=data.y.numpy(),
-#                 cmap=plt.cm.get_cmap("jet", n_labels))
-#     plt.savefig('sdf', format='pdf')
+def train_save_embeddings(method, dataset_str):
+    embeddings, _ = train_encoder(dataset_str, method, encoder_str='gcn',
+                                  dimensions=[256,128], lr=1e-3, epochs=200,
+                                  device_str='cuda', seed=0)
+
+    embeddings = embeddings.numpy()
+    np.save(method, embeddings)
+    return
 
 
-#plot_embeddings('dgi', 'cora')
+def plot_embeddings(method, dataset_str):
+    embeddings = np.load(method + '.npy')
+    data = get_data(dataset_str)
+    labels = data.y.numpy()
+    n_labels = np.unique(labels).size
+
+    plt.figure(figsize=(2.5, 2.5))
+    for p in [5, 10, 20, 50]:
+        z = TSNE(n_components=2, perplexity=p).fit_transform(embeddings)
+        plt.scatter(z[:, 0], z[:, 1], c=data.y.numpy(),
+                    cmap=plt.cm.get_cmap("jet", n_labels))
+        plt.savefig(method + '_' + str(p) + '.png')
+        plt.cla()
 
 
+plot_embeddings('gae', 'cora')
