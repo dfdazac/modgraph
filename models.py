@@ -19,12 +19,12 @@ class MLPEncoder(nn.Module):
 
         self.layers = nn.ModuleList([nn.Linear(input_feat_dim, hidden_dims[0],
                                                bias=False),
-                                     nn.PReLU(hidden_dims[0])])
+                                     nn.ReLU(hidden_dims[0])])
 
         for i in range(1, len(hidden_dims)):
             self.layers.append(nn.Linear(hidden_dims[i - 1], hidden_dims[i],
                                          bias=False))
-            self.layers.append(nn.PReLU(hidden_dims[i]))
+            self.layers.append(nn.ReLU(hidden_dims[i]))
 
     def forward(self, data, edge_index, corrupt=False):
         if corrupt:
