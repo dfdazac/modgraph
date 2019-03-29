@@ -1,4 +1,4 @@
-name: pygeomtf
+name: graphlearn
 channels:
   - conda-forge
   - pytorch

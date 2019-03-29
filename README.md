@@ -11,7 +11,7 @@ conda env create -f environment.yml
 Activate the environment
 
 ```sh
-source activate pytorch
+source activate graphlearn
 ```
 
 We use [Sacred](https://github.com/IDSIA/sacred) to run and log all the experiments. To list the configuration variables and their default values, run
