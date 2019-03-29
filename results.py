@@ -6,6 +6,7 @@ from matplotlib import rcParams
 import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.manifold import TSNE
+import networkx as nx
 
 from train import train_encoder
 from utils import get_data, adj_from_edge_index
@@ -143,27 +144,30 @@ def dataset_boxplots():
 
 def train_save_embeddings(method, dataset_str):
     embeddings, _ = train_encoder(dataset_str, method, encoder_str='gcn',
-                                  dimensions=[256,128], lr=1e-3, epochs=200,
+                                  dimensions=[256, 128], lr=1e-3, epochs=200,
                                   device_str='cuda', seed=0)
-
     embeddings = embeddings.numpy()
-    np.save(method, embeddings)
-    return
+    np.save('emb_' + method, embeddings)
 
 
 def plot_embeddings(method, dataset_str):
-    embeddings = np.load(method + '.npy')
+    embeddings = np.load('emb_' + method + '.npy')
     data = get_data(dataset_str)
     labels = data.y.numpy()
     n_labels = np.unique(labels).size
+    graph = nx.from_scipy_sparse_matrix(adj_from_edge_index(data.edge_index))
+    y = data.y.numpy()
 
-    plt.figure(figsize=(2.5, 2.5))
-    for p in [5, 10, 20, 50]:
-        z = TSNE(n_components=2, perplexity=p).fit_transform(embeddings)
-        plt.scatter(z[:, 0], z[:, 1], c=data.y.numpy(),
-                    cmap=plt.cm.get_cmap("jet", n_labels))
-        plt.savefig(method + '_' + str(p) + '.png')
-        plt.cla()
+    z = TSNE(n_components=2).fit_transform(embeddings)
+    pos = {i: z_i for i, z_i in enumerate(z)}
+    fig, ax = plt.subplots()
+    nx.draw(graph, pos, node_size=50, node_color=y, ax=ax,
+            cmap=plt.cm.get_cmap('jet', n_labels), edge_color='silver')
+    ax.set_axis_on()
+    fig.savefig('fig_' + method)
+    plt.cla()
 
 
-plot_embeddings('gae', 'cora')
+for method in ['gae', 'dgi', 'graph2gauss']:
+    train_save_embeddings(method, 'cora')
+    plot_embeddings(method, 'cora')
