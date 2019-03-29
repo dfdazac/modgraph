@@ -182,6 +182,22 @@ else:
 
 @ex.config
 def config():
+    """
+    dataset_str (str): one of {'cora', 'citeseer', 'pubmed', 'corafull',
+                               'coauthorcs, 'coauthorphys', 'amazoncomp',
+                               'amazonphoto'}
+    method (str): one of {'gae', 'dgi', 'graph2gauss', 'node2vec'}
+    encoder_str (str): one of {'mlp', 'gcn', 'sgc'}
+    hiddem_dims (list): List with number of units in each layer of the encoder
+    lr (float): learning rate
+    epochs (int): number of epochs for training
+    p_labeled (float): percentage of labeled nodes used for node classification
+    n_exper (int): number of experiments to repeat with different random seeds
+    device (str): one of {'cpu', 'cuda'}
+    timestamp (int): unique identifier for a set of experiments
+    edge_score (str): scoring function used for link prediction. One of
+        {'inner', 'bilinear'}
+    """
     dataset_str = 'cora'
     method = 'gae'
     encoder_str = 'gcn'
