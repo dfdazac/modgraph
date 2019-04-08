@@ -221,6 +221,31 @@ def inner_product_scores(emb, edges_pos, edges_neg):
     return auc_score, ap_score
 
 
+def link_prediction_scores(pos_score, neg_score):
+    """Evaluate the AUC and AP scores when using the provided embeddings to
+    predict links between nodes.
+
+    Args:
+        emb: tensor of shape (N, d) where N is the number of nodes and d
+            the dimension of the embeddings.
+        edges_pos, edges_neg: tensors of shape (2, p) containing positive
+        and negative edges, respectively, in their columns.
+
+    Returns:
+        auc_score, float
+        ap_score, float
+    """
+    preds = torch.cat((pos_score, neg_score)).detach().cpu().numpy()
+
+    targets = torch.cat((torch.ones_like(pos_score),
+                         torch.zeros_like(neg_score))).cpu().numpy()
+
+    auc_score = roc_auc_score(targets, preds)
+    ap_score = average_precision_score(targets, preds)
+
+    return auc_score, ap_score
+
+
 def build_data(emb, edges_pos, edges_neg):
     # Tensors on device
     pairs_pos = torch.stack((emb[edges_pos[0]], emb[edges_pos[1]]), dim=1)
