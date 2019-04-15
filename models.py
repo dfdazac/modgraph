@@ -214,7 +214,7 @@ class SGE(nn.Module):
         super(SGE, self).__init__()
         self.encoder = encoder
         self.sinkhorn = SinkhornDistance(eps=0.1, max_iter=10)
-        self.space_dim = 2
+        self.space_dim = 4
         self.n_points = emb_dim//self.space_dim
 
     def score_pairs(self, embs, nodes_x, nodes_y):

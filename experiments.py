@@ -17,25 +17,25 @@ if not args.log:
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 # Configuration template
-config = {'dataset_str': None,
-          'method': 'graph2gauss',
-          'encoder_str': 'gcn',
+config = {'dataset_str': 'cora',
+          'method': 'sge',
+          'encoder_str': None,
           'hidden_dims': [256, 128],
-          'lr': 1e-4,
+          'lr': None,
           'epochs': 200,
-          'p_labeled': None,
+          'p_labeled': 0.1,
           'n_exper': 20,
           'device': device,
           'timestamp': str(int(time.time())),
           'edge_score': 'inner'}
 
 # Values to be changed in experiments
-param_grid = {'dataset_str': ['citeseer', 'pubmed'],
-              'p_labeled': [0.02, 0.04, 0.06, 0.08, 0.1]}
+param_grid = {'encoder_str': ['mlp', 'gcn', 'sgc'],
+              'lr': [1e-2, 1e-3, 1e-4]}
 
 grid = ParameterGrid(param_grid)
 
-for task in ['node_class_experiments']:
+for task in ['link_pred_experiments']:
     for i, hparams in enumerate(grid):
         print('Experiment configuration {:d}/{:d}'.format(i + 1, len(grid)))
         config.update(hparams)

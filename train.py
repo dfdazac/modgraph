@@ -90,21 +90,16 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, lr, epochs,
         print(f'Training {method}')
         optimizer = torch.optim.Adam(model.parameters(), lr=lr)
         best_auc = 0
-        i = 0
-        bsz = 1024
         for epoch in range(1, epochs + 1):
             model.train()
-            start = 0
-            for i in range(bsz, train_pos.shape[1], bsz):
-                optimizer.zero_grad()
-                loss = model(data, train_pos[:,start:i], train_neg[:,start:i])
-                loss.backward()
-                optimizer.step()
-                start = i
+            optimizer.zero_grad()
+            loss = model(data, train_pos, train_neg)
+            loss.backward()
+            optimizer.step()
 
             if link_prediction or method == 'gae':
                 # Evaluate on val edges
-                embeddings = model.encoder(data, train_pos)
+                embeddings = model.encoder(data, train_pos).cpu().detach()
                 pos_scores = model.score_pairs(embeddings, val_pos[0], val_pos[1])
                 neg_scores = model.score_pairs(embeddings, val_neg[0], val_neg[1])
                 #auc, ap = inner_product_scores(embeddings, val_pos, val_neg)
