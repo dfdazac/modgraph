@@ -168,6 +168,30 @@ def plot_embeddings(method, dataset_str):
     plt.cla()
 
 
-for method in ['gae', 'dgi', 'graph2gauss']:
+def plot_adjacency(method, dataset_str):
+    def sigmoid(x):
+        return 1/(1+np.exp(-x))
+
+    embeddings = np.load('emb_' + method + '.npy')
+    data = get_data(dataset_str)
+    adj = adj_from_edge_index(data.edge_index)
+    fig, ax = plt.subplots()
+    ax.imshow(adj.toarray(), cmap='binary')
+    fig.savefig('adj')
+    plt.cla()
+
+    pred_adj = sigmoid(embeddings @ embeddings.T)
+    ax.imshow(pred_adj, cmap='binary')
+    fig.savefig('adj_pred')
+
+if __name__ == '__main__':
+    #for method in ['gae', 'dgi', 'graph2gauss']:
+    #    train_save_embeddings(method, 'cora')
+    #    plot_embeddings(method, 'cora')
+    method = 'gae'
+    dataset_str = 'cora'
     train_save_embeddings(method, 'cora')
-    plot_embeddings(method, 'cora')
+    plot_adjacency(method, dataset_str)
+
+
+
