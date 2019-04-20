@@ -144,7 +144,7 @@ def dataset_boxplots():
 
 def train_save_embeddings(method, dataset_str):
     embeddings, _ = train_encoder(dataset_str, method, encoder_str='gcn',
-                                  dimensions=[256, 128], lr=1e-3, epochs=200,
+                                  dimensions=[256, 128], n_points=32, lr=1e-3, epochs=200,
                                   device_str='cuda', seed=0)
     embeddings = embeddings.numpy()
     np.save('emb_' + method, embeddings)

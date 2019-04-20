@@ -15,7 +15,7 @@ from models import (MLPEncoder, GCNEncoder, SGCEncoder, GAE, DGI, Node2Vec,
                     G2G, InnerProductScore, BilinearScore, SGE)
 
 
-def train_encoder(dataset_str, method, encoder_str, dimensions, lr, epochs,
+def train_encoder(dataset_str, method, encoder_str, dimensions, n_points, lr, epochs,
                   device_str, link_prediction=False, seed=0,
                   ckpt_name=None, edge_score='inner'):
     if encoder_str == 'mlp':
@@ -82,7 +82,7 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, lr, epochs,
         num_features = data.x.shape[1]
         encoder = encoder_class(num_features, dimensions)
         emb_dim = dimensions[-1]
-        model = model_class(encoder, emb_dim).to(device)
+        model = model_class(encoder, emb_dim, n_points).to(device)
 
         # Train model
         if ckpt_name is None:
@@ -111,10 +111,9 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, lr, epochs,
                     torch.save(model.state_dict(), ckpt_name)
 
                 if epoch % 50 == 0:
-                    log = ('\r[{:03d}/{:03d}] train loss: {:.6f}, '
+                    log = ('[{:03d}/{:03d}] train loss: {:.6f}, '
                            'val_auc: {:6f}, val_ap: {:6f}')
-                    print(log.format(epoch, epochs, loss.item(), auc, ap),
-                          end='', flush=True)
+                    print(log.format(epoch, epochs, loss.item(), auc, ap))
 
             elif epoch % 50 == 0:
                 log = '\r[{:03d}/{:03d}] train loss: {:.6f}'
@@ -211,9 +210,10 @@ def config():
     """
     dataset_str = 'cora'
     method = 'sge'
-    encoder_str = 'gcn'
+    encoder_str = 'mlp'
     hidden_dims = [256, 128]
-    lr = 0.0001
+    n_points = 8
+    lr = 0.001
     epochs = 200
     p_labeled = 0.1
     n_exper = 20
@@ -244,7 +244,7 @@ def log_statistics(results, metrics, timestamp, _run):
 
 @ex.command
 def link_pred_experiments(dataset_str, method, encoder_str, hidden_dims,
-                          edge_score, lr, epochs, n_exper, device,
+                          n_points, edge_score, lr, epochs, n_exper, device,
                           timestamp, _run):
     torch.random.manual_seed(0)
     np.random.seed(0)
@@ -253,7 +253,7 @@ def link_pred_experiments(dataset_str, method, encoder_str, hidden_dims,
     for i in range(n_exper):
         print('\nTrial {:d}/{:d}'.format(i + 1, n_exper))
         _, scores = train_encoder(dataset_str, method, encoder_str,
-                                  hidden_dims, lr, epochs,
+                                  hidden_dims, n_points, lr, epochs,
                                   device, seed=i, link_prediction=True,
                                   ckpt_name=timestamp, edge_score=edge_score)
         results[i] = scores
@@ -263,7 +263,7 @@ def link_pred_experiments(dataset_str, method, encoder_str, hidden_dims,
 
 @ex.automain
 def node_class_experiments(dataset_str, method, encoder_str, hidden_dims,
-                           lr, epochs, p_labeled, n_exper, device,
+                           n_points, lr, epochs, p_labeled, n_exper, device,
                            timestamp, _run):
     torch.random.manual_seed(0)
     np.random.seed(0)
@@ -272,7 +272,7 @@ def node_class_experiments(dataset_str, method, encoder_str, hidden_dims,
     for i in range(n_exper):
         print('\nTrial {:d}/{:d}'.format(i + 1, n_exper))
         embeddings, _ = train_encoder(dataset_str, method, encoder_str,
-                                   hidden_dims, lr, epochs,
+                                   hidden_dims, n_points, lr, epochs,
                                    device, seed=i, ckpt_name=timestamp)
 
         data = get_data(dataset_str)
