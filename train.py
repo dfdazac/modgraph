@@ -210,9 +210,9 @@ def config():
     """
     dataset_str = 'cora'
     method = 'sge'
-    encoder_str = 'mlp'
+    encoder_str = 'sgc'
     hidden_dims = [256, 128]
-    n_points = 8
+    n_points = 16
     lr = 0.001
     epochs = 200
     p_labeled = 0.1

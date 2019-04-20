@@ -29,14 +29,14 @@ config = {'dataset_str': 'cora',
           'lr': None,
           'epochs': 200,
           'p_labeled': 0.1,
-          'n_exper': 20,
+          'n_exper': 1,
           'device': device,
           'timestamp': str(int(time.time())),
           'edge_score': 'inner'}
 
 # Values to be changed in experiments
 param_grid = {'encoder_str': ['mlp', 'gcn', 'sgc'],
-              'n_points': [1, 4, 16, 32, 64],
+              'n_points': [1, 4, 16, 32],
               'lr': [1e-2, 1e-3, 1e-4]}
 
 grid = ParameterGrid(param_grid)
