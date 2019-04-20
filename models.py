@@ -210,12 +210,12 @@ class GAE(nn.Module):
 
 
 class SGE(nn.Module):
-    def __init__(self, encoder, emb_dim, *args):
+    def __init__(self, encoder, emb_dim, n_points, *args):
         super(SGE, self).__init__()
         self.encoder = encoder
         self.sinkhorn = SinkhornDistance(eps=0.1, max_iter=10)
-        self.space_dim = 4
-        self.n_points = emb_dim//self.space_dim
+        self.space_dim = emb_dim//n_points
+        self.n_points = n_points
 
     def score_pairs(self, embs, nodes_x, nodes_y):
         return -self.sinkhorn(embs[nodes_x].reshape(-1, self.n_points, self.space_dim),
@@ -268,9 +268,9 @@ class SinkhornDistance(nn.Module):
 
         # both marginals are fixed with equal weights
         mu = torch.empty(batch_size, x_points, dtype=torch.float,
-                         requires_grad=False).fill_(1.0 / x_points).squeeze()
+                         requires_grad=False).fill_(1.0 / x_points)
         nu = torch.empty(batch_size, y_points, dtype=torch.float,
-                         requires_grad=False).fill_(1.0 / y_points).squeeze()
+                         requires_grad=False).fill_(1.0 / y_points)
         mu = mu.to(device)
         nu = nu.to(device)
 
