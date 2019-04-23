@@ -9,7 +9,7 @@ from sklearn.metrics import (roc_auc_score, average_precision_score,
 from sklearn.model_selection import (StratifiedShuffleSplit, GridSearchCV,
                                      ShuffleSplit, PredefinedSplit)
 from sklearn.linear_model import LogisticRegressionCV
-from skorch.classifier import NeuralNetBinaryClassifier
+from skorch.classifier import NeuralNetClassifier, NeuralNetBinaryClassifier
 from skorch.callbacks import EarlyStopping
 from skorch import NeuralNet
 
@@ -351,6 +351,61 @@ def score_node_classification(features, targets, p_labeled=0.1, seed=0):
 
     lrcv.fit(features[split_train], targets[split_train])
     predicted = lrcv.predict(features[split_test])
+
+    f1_micro = f1_score(targets[split_test], predicted, average='micro')
+    f1_macro = f1_score(targets[split_test], predicted, average='macro')
+    accuracy = accuracy_score(targets[split_test], predicted)
+
+    return f1_micro, f1_macro, accuracy
+
+
+def score_node_classification_sets(features, targets, model_class, device_str, p_labeled=0.1, seed=0):
+    """
+    Train a classifier using the node embeddings as features and reports the performance.
+
+    Parameters
+    ----------
+    features : array-like, shape [N, L]
+        The features used to train the classifier, i.e. the node embeddings
+    targets : array-like, shape [N]
+        The ground truth labels
+    p_labeled : float
+        Percentage of nodes to use for training the classifier
+    n_repeat : int
+        Number of times to repeat the experiment
+    norm
+
+    Returns
+    -------
+    f1_micro: float
+        F_1 Score (micro) averaged of n_repeat trials.
+    f1_micro : float
+        F_1 Score (macro) averaged of n_repeat trials.
+    """
+    n_nodes, n_points, emb_dim = features.shape
+    n_classes = len(np.unique(targets))
+    sss = StratifiedShuffleSplit(n_splits=1, test_size=1 - p_labeled,
+                                 random_state=seed)
+    split_train, split_test = next(sss.split(features, targets))
+
+    net = NeuralNetClassifier(model_class, module__in_features=emb_dim,
+                                    module__n_classes=n_classes,
+                                    criterion=torch.nn.CrossEntropyLoss,
+                                    device=device_str, max_epochs=100,
+                                    verbose=0, optimizer=torch.optim.Adam,
+                                    iterator_train__shuffle=True,
+                                    batch_size=len(split_train))
+    params = {
+        'lr': [1e-3, 1e-2, 1e-2]
+    }
+    gs = GridSearchCV(net, params, cv=2, scoring='accuracy')
+
+    print('Training link prediction model')
+    gs.fit(features[split_train], targets[split_train])
+
+    print('Best parameters: ', gs.best_params_)
+    model = gs.best_estimator_
+    predicted = model.predict(features[split_test])
 
     f1_micro = f1_score(targets[split_test], predicted, average='micro')
     f1_macro = f1_score(targets[split_test], predicted, average='macro')

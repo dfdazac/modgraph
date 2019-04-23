@@ -24,7 +24,8 @@ class MLPEncoder(nn.Module):
         for i in range(1, len(hidden_dims)):
             self.layers.append(nn.Linear(hidden_dims[i - 1], hidden_dims[i],
                                          bias=False))
-            self.layers.append(nn.ReLU(hidden_dims[i]))
+            # FIXME
+            #self.layers.append(nn.ReLU(hidden_dims[i]))
 
     def forward(self, data, edge_index, corrupt=False):
         if corrupt:
@@ -36,7 +37,9 @@ class MLPEncoder(nn.Module):
         z = self.layers[1](self.layers[0](x))
 
         for i in range(2, len(self.layers), 2):
-            z = self.layers[i + 1](self.layers[i](z))
+            # FIXME
+            #z = self.layers[i + 1](self.layers[i](z))
+            z = self.layers[i](z)
 
         return z
 
@@ -52,7 +55,8 @@ class GCNEncoder(nn.Module):
         for i in range(1, len(hidden_dims)):
             self.layers.append(GCNConv(hidden_dims[i - 1], hidden_dims[i],
                                        bias=False))
-            self.layers.append(nn.ReLU())
+            # FIXME
+            #self.layers.append(nn.ReLU())
 
     def forward(self, data, edge_index, corrupt=False):
         if corrupt:
@@ -64,7 +68,9 @@ class GCNEncoder(nn.Module):
         z = self.layers[1](self.layers[0](x, edge_index))
 
         for i in range(2, len(self.layers), 2):
-            z = self.layers[i + 1](self.layers[i](z, edge_index))
+            # FIXME
+            #z = self.layers[i + 1](self.layers[i](z, edge_index))
+            z = self.layers[i](z, edge_index)
 
         return z
 
@@ -453,3 +459,24 @@ class BilinearScore(nn.Module):
         x_b = self.dropout(emb_b)
         score = torch.sum(torch.matmul(x_a, self.weight) * x_b, dim=-1)
         return score
+
+
+class DeepSetClassifier(nn.Module):
+    def __init__(self, in_features, n_classes):
+        super(DeepSetClassifier, self).__init__()
+
+        self.mlp = nn.Sequential(nn.Linear(in_features, in_features),
+                                 nn.ReLU(),
+                                 nn.Linear(in_features, in_features),
+                                 nn.ReLU())
+        self.linear_out = nn.Linear(in_features, n_classes)
+        self.dropout = nn.Dropout(0.2)
+
+    def forward(self, x):
+        out = self.mlp(x)
+        out, _ = torch.max(out, dim=1)
+        out = self.dropout(out)
+        out = self.linear_out(out)
+        out = self.dropout(out)
+
+        return out

@@ -10,9 +10,11 @@ from sacred.observers import MongoObserver
 
 from utils import (get_data, get_data_splits, sample_edges,
                    inner_product_scores, score_node_classification,
-                   score_link_prediction, link_prediction_scores)
+                   score_link_prediction, link_prediction_scores,
+                   score_node_classification_sets)
 from models import (MLPEncoder, GCNEncoder, SGCEncoder, GAE, DGI, Node2Vec,
-                    G2G, InnerProductScore, BilinearScore, SGE)
+                    G2G, InnerProductScore, BilinearScore, SGE,
+                    DeepSetClassifier)
 
 
 def train_encoder(dataset_str, method, encoder_str, dimensions, n_points, lr, epochs,
@@ -52,7 +54,7 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, n_points, lr, ep
     device = torch.device(device_str)
 
     # Load and split data
-    if not link_prediction and method == 'gae':
+    if not link_prediction and method in ['gae', 'sge']:
         neg_sample_mult = 10
         resample_neg_edges = True
         # GAE objective is link prediction
@@ -97,11 +99,12 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, n_points, lr, ep
             loss.backward()
             optimizer.step()
 
-            if link_prediction or method == 'gae':
+            if link_prediction or method in ['gae', 'sge']:
                 # Evaluate on val edges
                 embeddings = model.encoder(data, train_pos).cpu().detach()
                 pos_scores = model.score_pairs(embeddings, val_pos[0], val_pos[1])
                 neg_scores = model.score_pairs(embeddings, val_neg[0], val_neg[1])
+                # FIXME
                 #auc, ap = inner_product_scores(embeddings, val_pos, val_neg)
                 auc, ap = link_prediction_scores(pos_scores, neg_scores)
 
@@ -208,11 +211,11 @@ def config():
     edge_score (str): scoring function used for link prediction. One of
         {'inner', 'bilinear'}
     """
-    dataset_str = 'cora'
+    dataset_str = 'pubmed'
     method = 'sge'
-    encoder_str = 'sgc'
+    encoder_str = 'mlp'
     hidden_dims = [256, 128]
-    n_points = 16
+    n_points = 4
     lr = 0.001
     epochs = 200
     p_labeled = 0.1
@@ -274,10 +277,18 @@ def node_class_experiments(dataset_str, method, encoder_str, hidden_dims,
         embeddings, _ = train_encoder(dataset_str, method, encoder_str,
                                    hidden_dims, n_points, lr, epochs,
                                    device, seed=i, ckpt_name=timestamp)
+        if method == 'sge':
+            embeddings = embeddings.reshape(-1, n_points, hidden_dims[-1]//n_points)
 
         data = get_data(dataset_str)
         labels = data.y.cpu().numpy()
-        scores = score_node_classification(embeddings, labels, p_labeled, seed=i)
+        if method == 'sge':
+            embeddings = embeddings.numpy()
+            scores = score_node_classification_sets(embeddings, labels, DeepSetClassifier,
+                                                    device, p_labeled, seed=i)
+        else:
+            scores = score_node_classification(embeddings, labels, p_labeled, seed=i)
+
         test_acc = scores[2]
         print('test_acc: {:.6f}'.format(test_acc))
         results[i] = test_acc
