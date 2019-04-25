@@ -12,6 +12,8 @@ from utils import adj_from_edge_index
 from g2g.model import Graph2Gauss
 from g2g.utils import score_link_prediction
 
+import warnings
+
 
 class MLPEncoder(nn.Module):
     def __init__(self, input_feat_dim, hidden_dims, *args):
@@ -229,10 +231,26 @@ class SGE(nn.Module):
 
     def forward(self, data, edges_pos, edges_neg):
         z = self.encoder(data, edges_pos)
-        pos_energy = self.score_pairs(z, edges_pos[0], edges_pos[1])
-        neg_energy = self.score_pairs(z, edges_neg[0], edges_neg[1])
+        pos_energy = -self.score_pairs(z, edges_pos[0], edges_pos[1])
+        neg_energy = -self.score_pairs(z, edges_neg[0], edges_neg[1])
 
-        loss = (pos_energy**2 + torch.exp(neg_energy)).mean()
+        # BCE Loss
+        #loss = (pos_energy - torch.log(1 - torch.exp(-neg_energy)) + 1e-8).mean()
+
+        # Square exponential loss
+        # loss = (pos_energy**2 + torch.exp(-neg_energy)).mean()
+
+        # Square-square loss
+        m = 1.5
+        margin_diff = m - neg_energy
+        margin_diff[margin_diff < 0] = 0
+        loss = torch.mean(pos_energy**2) + torch.mean(margin_diff**2)
+
+        # Hinge loss
+        # m = 2
+        # margin = m + pos_energy - neg_energy
+        # margin[margin < 0] = 0
+        # loss = margin.mean()
 
         return loss
 
@@ -260,6 +278,7 @@ class SinkhornDistance(nn.Module):
         self.eps = eps
         self.max_iter = max_iter
         self.reduction = reduction
+        self.warn = True
 
     def forward(self, x, y):
         device = x.device
@@ -299,6 +318,10 @@ class SinkhornDistance(nn.Module):
             if err.item() < thresh:
                 break
 
+        if self.warn and actual_nits == self.max_iter:
+            warnings.warn(self.__class__.__name__ + ': Reached max iterations')
+            self.warn = False
+
         U, V = u, v
         # Transport plan pi = diag(a)*K*diag(b)
         pi = torch.exp(self.M(C, U, V))
@@ -318,7 +341,7 @@ class SinkhornDistance(nn.Module):
         return (-C + u.unsqueeze(-1) + v.unsqueeze(-2)) / self.eps
 
     @staticmethod
-    def _cost_matrix(x, y, p=2):
+    def _cost_matrix(x, y, p=1):
         "Returns the matrix of $|x_i-y_j|^p$."
         x_col = x.unsqueeze(-2)
         y_lin = y.unsqueeze(-3)

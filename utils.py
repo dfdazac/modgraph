@@ -396,7 +396,7 @@ def score_node_classification_sets(features, targets, model_class, device_str, p
                                     iterator_train__shuffle=True,
                                     batch_size=len(split_train))
     params = {
-        'lr': [1e-3, 1e-2, 1e-2]
+        'lr': [1e-3, 1e-2, 1e-1]
     }
     gs = GridSearchCV(net, params, cv=2, scoring='accuracy')
 

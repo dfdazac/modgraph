@@ -95,6 +95,8 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, n_points, lr, ep
         for epoch in range(1, epochs + 1):
             model.train()
             optimizer.zero_grad()
+            if epoch == epochs:
+                print('wait a minute')
             loss = model(data, train_pos, train_neg)
             loss.backward()
             optimizer.step()
@@ -211,11 +213,11 @@ def config():
     edge_score (str): scoring function used for link prediction. One of
         {'inner', 'bilinear'}
     """
-    dataset_str = 'pubmed'
+    dataset_str = 'cora'
     method = 'sge'
     encoder_str = 'mlp'
     hidden_dims = [256, 128]
-    n_points = 4
+    n_points = 16
     lr = 0.001
     epochs = 200
     p_labeled = 0.1
