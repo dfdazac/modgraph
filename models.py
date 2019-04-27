@@ -13,8 +13,6 @@ from utils import adj_from_edge_index
 from g2g.model import Graph2Gauss
 from g2g.utils import score_link_prediction
 
-import warnings
-
 
 class MLPEncoder(nn.Module):
     def __init__(self, input_feat_dim, hidden_dims, *args):
@@ -184,6 +182,9 @@ class DGI(nn.Module):
         self.discriminator = Discriminator(emb_dim)
         self.loss = nn.BCEWithLogitsLoss()
 
+    def score_pairs(self, embs, nodes_x, nodes_y):
+        return (embs[nodes_x] * embs[nodes_y]).sum(dim=1)
+
     def forward(self, data, edges_pos, edges_neg):
         positive = self.encoder(data, edges_pos, corrupt=False)
         negative = self.encoder(data, edges_pos, corrupt=True)
@@ -203,6 +204,9 @@ class GAE(nn.Module):
         super(GAE, self).__init__()
         self.encoder = encoder
         self.loss_fn = nn.BCEWithLogitsLoss()
+
+    def score_pairs(self, embs, nodes_x, nodes_y):
+        return (embs[nodes_x] * embs[nodes_y]).sum(dim=1)
 
     def forward(self, data, edges_pos, edges_neg):
         z = self.encoder(data, edges_pos)
