@@ -4,6 +4,7 @@ import time
 import gc
 
 import torch
+from torch.utils.data import DataLoader
 import numpy as np
 from sacred import Experiment
 from sacred.observers import MongoObserver
@@ -15,6 +16,7 @@ from utils import (get_data, get_data_splits, sample_edges,
 from models import (MLPEncoder, GCNEncoder, SGCEncoder, GAE, DGI, Node2Vec,
                     G2G, InnerProductScore, BilinearScore, SGE,
                     DeepSetClassifier)
+from samplers import FirstNeighborSampling, make_sample_iterator
 
 
 def train_encoder(dataset_str, method, encoder_str, dimensions, n_points, lr, epochs,
@@ -69,17 +71,14 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, n_points, lr, ep
                                                  add_self_connections, seed)
     train_pos, val_pos, test_pos = pos_split
     train_neg_all, val_neg, test_neg = neg_split
-    num_train = train_pos.shape[1]
-    if resample_neg_edges:
-        train_neg = sample_edges(train_neg_all, num_train, seed)
-    else:
-        train_neg = train_neg_all
+
+    train_sampler = FirstNeighborSampling(epochs, train_pos, train_neg_all,
+                                          resample_neg_edges)
+    train_iter = make_sample_iterator(train_sampler, num_workers=1)
 
     # Train model
     if method in ['gae', 'dgi', 'sge']:
         data.x = data.x.to(device)
-        train_pos = train_pos.to(device)
-        train_neg = train_neg.to(device)
 
         num_features = data.x.shape[1]
         encoder = encoder_class(num_features, dimensions)
@@ -96,6 +95,10 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, n_points, lr, ep
             model.train()
             optimizer.zero_grad()
 
+            train_pos, train_neg = next(train_iter)
+            train_pos = train_pos.to(device)
+            train_neg = train_neg.to(device)
+
             loss = model(data, train_pos, train_neg)
             loss.backward()
             optimizer.step()
@@ -105,8 +108,7 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, n_points, lr, ep
                 embeddings = model.encoder(data, train_pos).cpu().detach()
                 pos_scores = model.score_pairs(embeddings, val_pos[0], val_pos[1])
                 neg_scores = model.score_pairs(embeddings, val_neg[0], val_neg[1])
-                # FIXME
-                #auc, ap = inner_product_scores(embeddings, val_pos, val_neg)
+
                 auc, ap = link_prediction_scores(pos_scores, neg_scores)
 
                 if auc > best_auc:
@@ -120,15 +122,9 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, n_points, lr, ep
                     print(log.format(epoch, epochs, loss.item(), auc, ap))
 
             elif epoch % 50 == 0:
-                log = '\r[{:03d}/{:03d}] train loss: {:.6f}'
+                log = '[{:03d}/{:03d}] train loss: {:.6f}'
                 print(log.format(epoch, epochs, loss.item()), end='',
                       flush=True)
-
-            if resample_neg_edges:
-                train_neg = sample_edges(train_neg_all,
-                                         num_train, seed+epoch).to(device)
-
-        print()
 
         if not link_prediction and method != 'gae':
             # Save the last state
@@ -213,8 +209,8 @@ def config():
         {'inner', 'bilinear'}
     """
     dataset_str = 'cora'
-    method = 'sge'
-    encoder_str = 'mlp'
+    method = 'gae'
+    encoder_str = 'sgc'
     hidden_dims = [256, 128]
     n_points = 16
     lr = 0.001
