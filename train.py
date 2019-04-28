@@ -12,7 +12,7 @@ from utils import (get_data, get_data_splits,
                    score_link_prediction, link_prediction_scores,
                    score_node_classification_sets)
 from models import (MLPEncoder, GCNEncoder, SGCEncoder, GAE, DGI, Node2Vec,
-                    G2G, BilinearScore, SGE, DeepSetClassifier, G2GEncoder)
+                    G2G, BilinearScore, SGE, DeepSetClassifier, MLPGaussianEncoder, GCNGaussianEncoder)
 from samplers import make_sample_iterator, FirstNeighborSampling, GraphCorruptionSampling, RankedSampling
 
 
@@ -26,10 +26,13 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, n_points, lr, ep
     elif encoder_str == 'sgc':
         encoder_class = SGCEncoder
     elif encoder_str == 'mlpgauss':
-        encoder_class = G2GEncoder
+        encoder_class = MLPGaussianEncoder
+    elif encoder_str == 'gcngauss':
+        encoder_class = GCNGaussianEncoder
     else:
         raise ValueError(f'Unknown encoder {encoder_str}')
 
+    energy = 'kldiv'
     if method == 'dgi':
         model_class = DGI
     elif method == 'gae':
@@ -37,6 +40,9 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, n_points, lr, ep
     elif method == 'sge':
         model_class = SGE
     elif method == 'graph2gauss':
+        model_class = G2G
+    elif method == 'graph2vec':
+        energy = 'sqeuclidean'
         model_class = G2G
     elif method in ['node2vec', 'raw']:
         model_class = None
@@ -77,7 +83,7 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, n_points, lr, ep
         train_sampler = FirstNeighborSampling(epochs, train_pos, train_neg, resample_neg_edges)
     elif method == 'dgi':
         train_sampler = GraphCorruptionSampling(epochs, train_pos, data.num_nodes)
-    elif method == 'graph2gauss':
+    elif method in ['graph2gauss', 'graph2vec', 'sge']:
         train_sampler = RankedSampling(epochs, train_pos)
     else:
         raise ValueError(f'Sampling strategy undefined for method {method}')
@@ -85,14 +91,15 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, n_points, lr, ep
     train_iter = make_sample_iterator(train_sampler, num_workers=1)
 
     # Train model
-    if method in ['gae', 'dgi', 'sge', 'graph2gauss']:
-        data.x = data.x.to(device)
+    if method in ['gae', 'dgi', 'sge', 'graph2gauss', 'graph2vec']:
+        x = data.x.to(device)
         edge_index = train_pos.to(device)
 
         num_features = data.x.shape[1]
         encoder = encoder_class(num_features, dimensions)
         emb_dim = dimensions[-1]
-        model = model_class(encoder, emb_dim, n_points).to(device)
+        model = model_class(encoder, emb_dim=emb_dim,
+                            energy=energy, n_points=n_points).to(device)
 
         # Train model
         if ckpt_name is None:
@@ -108,13 +115,13 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, n_points, lr, ep
             pos_samples = pos_samples.to(device)
             neg_samples = neg_samples.to(device)
 
-            loss = model(data, edge_index, pos_samples, neg_samples)
+            loss = model(x, edge_index, pos_samples, neg_samples)
             loss.backward()
             optimizer.step()
 
-            if link_prediction or method in ['gae', 'sge']:
+            if link_prediction or isinstance(train_sampler, FirstNeighborSampling):
                 # Evaluate on val edges
-                embeddings = model.encoder(data, edge_index).detach().cpu()
+                embeddings = model.encoder(x, edge_index).detach().cpu()
                 pos_scores = model.score_pairs(embeddings, val_pos[0], val_pos[1])
                 neg_scores = model.score_pairs(embeddings, val_neg[0], val_neg[1])
 
@@ -149,10 +156,10 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, n_points, lr, ep
         model = None
 
     if method == 'raw':
-        embeddings = data.x
+        embeddings = x
     else:
         model.eval()
-        embeddings = model.encoder(data, edge_index).detach().cpu()
+        embeddings = model.encoder(x, edge_index).detach().cpu()
 
     if link_prediction:
         if edge_score_class is None:
@@ -179,7 +186,7 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, n_points, lr, ep
     else:
         auc, ap = None, None
 
-    if method == 'graph2gauss':
+    if method in ['graph2gauss', 'graph2vec']:
         # Use the mean for downstream tasks
         embeddings = embeddings[0]
 
@@ -215,10 +222,10 @@ def config():
         {'inner', 'bilinear'}
     """
     dataset_str = 'cora'
-    method = 'dgi'
-    encoder_str = 'gcn'
+    method = 'sge'
+    encoder_str = 'mlp'
     hidden_dims = [256, 128]
-    n_points = 16
+    n_points = 4 #93.0, 92.8
     lr = 0.001
     epochs = 200
     p_labeled = 0.1

@@ -7,64 +7,10 @@ import torch.nn.functional as F
 from torch_geometric.nn import GCNConv, MessagePassing
 from torch_geometric.nn.inits import glorot
 import numpy as np
-import scipy.sparse as sp
 from geomloss import SamplesLoss
 
-from utils import adj_from_edge_index
-from g2g.model import Graph2Gauss
-from g2g.utils import score_link_prediction
 
-
-class MLPEncoder(nn.Module):
-    def __init__(self, input_feat_dim, hidden_dims, *args):
-        super(MLPEncoder, self).__init__()
-
-        self.layers = nn.ModuleList([nn.Linear(input_feat_dim, hidden_dims[0],
-                                               bias=False),
-                                     nn.ReLU(hidden_dims[0])])
-
-        for i in range(1, len(hidden_dims)):
-            self.layers.append(nn.Linear(hidden_dims[i - 1], hidden_dims[i],
-                                         bias=False))
-            # FIXME
-            #self.layers.append(nn.ReLU(hidden_dims[i]))
-
-    def forward(self, data, edge_index):
-        z = self.layers[1](self.layers[0](data.x))
-
-        for i in range(2, len(self.layers), 2):
-            # FIXME
-            #z = self.layers[i + 1](self.layers[i](z))
-            z = self.layers[i](z)
-
-        return z
-
-
-class GCNEncoder(nn.Module):
-    def __init__(self, input_feat_dim, hidden_dims, *args):
-        super(GCNEncoder, self).__init__()
-
-        self.layers = nn.ModuleList([GCNConv(input_feat_dim, hidden_dims[0],
-                                             bias=False),
-                                     nn.ReLU()])
-
-        for i in range(1, len(hidden_dims)):
-            self.layers.append(GCNConv(hidden_dims[i - 1], hidden_dims[i],
-                                       bias=False))
-            # FIXME
-            #self.layers.append(nn.ReLU())
-
-    def forward(self, data, edge_index):
-        z = self.layers[1](self.layers[0](data.x, edge_index))
-
-        for i in range(2, len(self.layers), 2):
-            # FIXME
-            #z = self.layers[i + 1](self.layers[i](z, edge_index))
-            z = self.layers[i](z, edge_index)
-
-        return z
-
-
+# Adapted from PyTorch Geometric
 class SGConv(MessagePassing):
     r"""The simgple graph convolutional operator from the `"Simplifying Graph
     Convolutional Networks" <https://arxiv.org/abs/1902.07153>`_ paper
@@ -128,18 +74,55 @@ class SGConv(MessagePassing):
                                          self.K)
 
 
+class MLPEncoder(nn.Module):
+    def __init__(self, in_features, hidden_dims, *args):
+        super(MLPEncoder, self).__init__()
+
+        dims = [in_features] + hidden_dims
+        layers = []
+        for i in range(len(hidden_dims) - 1):
+            layers.append(nn.Linear(in_features=dims[i], out_features=dims[i + 1]))
+
+        layers.append(nn.Linear(in_features=dims[-2], out_features=dims[-1]))
+        self.layers = nn.ModuleList(layers)
+
+    def forward(self, x, edge_index):
+        for layer in self.layers[:-1]:
+            x = torch.relu(layer(x))
+
+        return self.layers[-1](x)
+
+
+class GCNEncoder(nn.Module):
+    def __init__(self, in_features, hidden_dims, *args):
+        super(GCNEncoder, self).__init__()
+
+        dims = [in_features] + hidden_dims
+        layers = []
+        for i in range(len(hidden_dims) - 1):
+            layers.append(GCNConv(in_channels=dims[i], out_channels=dims[i + 1]))
+
+        layers.append(GCNConv(in_channels=dims[-2], out_channels=dims[-1]))
+        self.layers = nn.ModuleList(layers)
+
+    def forward(self, x, edge_index):
+        for layer in self.layers[:-1]:
+            x = torch.relu(layer(x, edge_index))
+
+        return self.layers[-1](x, edge_index)
+
+
 class SGCEncoder(nn.Module):
-    def __init__(self, input_feat_dim, hidden_dims, *args):
+    def __init__(self, in_features, hidden_dims, *args):
         super(SGCEncoder, self).__init__()
 
         out_channels = hidden_dims[-1]
         K = len(hidden_dims)
-        self.layer = SGConv(input_feat_dim, out_channels, K, cached=True,
+        self.layer = SGConv(in_features, out_channels, K, cached=True,
                             bias=False)
 
-    def forward(self, data, edge_index):
-        z = self.layer(data.x, edge_index)
-        return z
+    def forward(self, x, edge_index):
+        return self.layer(x, edge_index)
 
 
 class Discriminator(nn.Module):
@@ -158,7 +141,7 @@ class Discriminator(nn.Module):
 
 
 class DGI(nn.Module):
-    def __init__(self, encoder, emb_dim, *args):
+    def __init__(self, encoder, emb_dim=None, **kwargs):
         super(DGI, self).__init__()
         self.encoder = encoder
         self.discriminator = Discriminator(emb_dim)
@@ -167,9 +150,9 @@ class DGI(nn.Module):
     def score_pairs(self, embs, nodes_x, nodes_y):
         return (embs[nodes_x] * embs[nodes_y]).sum(dim=1)
 
-    def forward(self, data, edge_index, edges_pos, edges_neg):
-        positive = self.encoder(data, edges_pos)
-        negative = self.encoder(data, edges_neg)
+    def forward(self, x, edge_index, edges_pos, edges_neg):
+        positive = self.encoder(x, edges_pos)
+        negative = self.encoder(x, edges_neg)
         summary = torch.sigmoid(positive.mean(dim=0))
 
         positive = self.discriminator(positive, summary)
@@ -182,7 +165,7 @@ class DGI(nn.Module):
 
 
 class GAE(nn.Module):
-    def __init__(self, encoder, emb_dim, *args):
+    def __init__(self, encoder, **kwargs):
         super(GAE, self).__init__()
         self.encoder = encoder
         self.loss_fn = nn.BCEWithLogitsLoss()
@@ -190,12 +173,12 @@ class GAE(nn.Module):
     def score_pairs(self, embs, nodes_x, nodes_y):
         return (embs[nodes_x] * embs[nodes_y]).sum(dim=1)
 
-    def forward(self, data, edge_index, edges_pos, edges_neg):
+    def forward(self, x, edge_index, edges_pos, edges_neg):
         device = next(self.parameters()).device
         edges_pos = edges_pos.to(device)
         edges_neg = edges_neg.to(device)
 
-        z = self.encoder(data, edges_pos)
+        z = self.encoder(x, edge_index)
         # Get scores for edges using inner product
         pos_score = (z[edges_pos[0]] * z[edges_pos[1]]).sum(dim=1)
         neg_score = (z[edges_neg[0]] * z[edges_neg[1]]).sum(dim=1)
@@ -209,7 +192,7 @@ class GAE(nn.Module):
 
 
 class SGE(nn.Module):
-    def __init__(self, encoder, emb_dim, n_points, *args):
+    def __init__(self, encoder, emb_dim=None, n_points=None, **kwargs):
         super(SGE, self).__init__()
         self.encoder = encoder
         self.sinkhorn = SamplesLoss(loss='sinkhorn', p=1, blur=0.05)
@@ -220,8 +203,8 @@ class SGE(nn.Module):
         return -self.sinkhorn(embs[nodes_x].reshape(-1, self.n_points, self.space_dim),
                               embs[nodes_y].reshape(-1, self.n_points, self.space_dim))
 
-    def forward(self, data, edge_index, edges_pos, edges_neg):
-        z = self.encoder(data, edges_pos)
+    def forward(self, x, edge_index, edges_pos, edges_neg):
+        z = self.encoder(x, edge_index)
         pos_energy = -self.score_pairs(z, edges_pos[0], edges_pos[1])
         neg_energy = -self.score_pairs(z, edges_neg[0], edges_neg[1])
 
@@ -229,7 +212,7 @@ class SGE(nn.Module):
         # loss = (pos_energy - torch.log(1 - torch.exp(-neg_energy)) + 1e-8).mean()
 
         # Square exponential loss
-        # loss = (pos_energy**2 + torch.exp(-neg_energy)).mean()
+        #loss = (pos_energy**2 + torch.exp(-neg_energy)).mean()
 
         # Square-square loss
         m = 1.5
@@ -257,7 +240,7 @@ class LookupEncoder(nn.Module):
         super(LookupEncoder, self).__init__()
         self.embeddings = nn.Parameter(embeddings)
 
-    def forward(self, data, edge_index, *args, **kwargs):
+    def forward(self, x, edge_index, *args, **kwargs):
         return self.embeddings
 
 
@@ -289,76 +272,60 @@ class Node2Vec(nn.Module):
         self.encoder = LookupEncoder(all_embs)
 
 
-class G2GTf(nn.Module):
-    def __init__(self, data, encoder, n_hidden, dim, train_ones, val_ones,
-                 val_zeros, test_ones, test_zeros, epochs, lr, K,
-                 link_prediction, energy='sqeuclidean'):
-        super(G2GTf, self).__init__()
+class MLPGaussianEncoder(nn.Module):
+    def __init__(self, in_features, hidden_dims, *args):
+        super(MLPGaussianEncoder, self).__init__()
 
-        # FIXME
-        A = adj_from_edge_index(data.edge_index)
+        self.linear = nn.Linear(in_features=in_features,
+                                out_features=hidden_dims[0])
+        self.linear_mu = nn.Linear(in_features=hidden_dims[0],
+                                   out_features=hidden_dims[1])
+        self.linear_logsigma = nn.Linear(in_features=hidden_dims[0],
+                                         out_features=hidden_dims[1])
 
-        X = sp.csr_matrix(data.x.cpu().numpy())
-        train_ones = train_ones.cpu().numpy().T
-        if link_prediction:
-            val_ones = val_ones.cpu().numpy().T
-            val_zeros = val_zeros.cpu().numpy().T
-            test_ones = test_ones.cpu().numpy().T
-            test_zeros = test_zeros.cpu().numpy().T
-
-            g2g = Graph2Gauss(A, X, dim, train_ones, val_ones, val_zeros,
-                              test_ones, test_zeros, K, n_hidden=n_hidden,
-                              max_iter=epochs, lr=lr, encoder=encoder,
-                              energy=energy)
-        else:
-            g2g = Graph2Gauss(A, X, dim, train_ones, val_ones=None,
-                              val_zeros=None, test_ones=None, test_zeros=None,
-                              K=K, p_val=0, p_test=0, n_hidden=n_hidden,
-                              max_iter=epochs, lr=lr, encoder=encoder,
-                              energy=energy)
-
-        session = g2g.train()
-        mu, sigma = session.run([g2g.mu, g2g.sigma])
-        all_embs = torch.tensor(mu, dtype=torch.float32)
-        self.encoder = LookupEncoder(all_embs)
-
-        if link_prediction:
-            test_scores = session.run(g2g.neg_test_energy, g2g.feed_dict)
-            test_auc, test_ap = score_link_prediction(g2g.test_ground_truth,
-                                                                test_scores)
-        else:
-            test_auc, test_ap = None, None
-
-        self.test_auc, self.test_ap = test_auc, test_ap
-
-
-class G2GEncoder(nn.Module):
-    def __init__(self, num_features, dimensions):
-        super(G2GEncoder, self).__init__()
-
-        self.linear = nn.Linear(in_features=num_features,
-                                out_features=dimensions[0])
-        self.linear_mu = nn.Linear(in_features=dimensions[0],
-                                   out_features=dimensions[1])
-        self.linear_logsigma = nn.Linear(in_features=dimensions[0],
-                                         out_features=dimensions[1])
-
-    def forward(self, data, *args):
-        out = F.relu(self.linear(data.x))
+    def forward(self, x, edge_index):
+        out = F.relu(self.linear(x))
         mu = self.linear_mu(out)
         sigma = F.elu(self.linear_logsigma(out)) + 1 + 1e-14
 
         return torch.stack((mu, sigma), dim=0)
 
 
+class GCNGaussianEncoder(nn.Module):
+    def __init__(self, in_features, hidden_dims, *args):
+        super(GCNGaussianEncoder, self).__init__()
+
+        self.gcn_in = GCNConv(in_channels=in_features,
+                              out_channels=hidden_dims[0])
+        self.gcn_mu = GCNConv(in_channels=hidden_dims[0],
+                              out_channels=hidden_dims[1])
+        self.gcn_logsigma = GCNConv(in_channels=hidden_dims[0],
+                                    out_channels=hidden_dims[1])
+
+    def forward(self, x, edge_index):
+        out = F.relu(self.gcn_in(x, edge_index))
+        mu = self.gcn_mu(out, edge_index)
+        sigma = F.elu(self.gcn_logsigma(out, edge_index)) + 1 + 1e-14
+
+        return torch.stack((mu, sigma), dim=0)
+
+
 class G2G(nn.Module):
-    def __init__(self, encoder, *args):
+    def __init__(self, encoder, energy=None, **kwargs):
         super(G2G, self).__init__()
         self.encoder = encoder
 
-    def score_pairs(self, embs, nodes_x, nodes_y):
+        if energy == 'kldiv':
+            self.score_pairs = self.score_pairs_kldiv
+        elif energy == 'sqeuclidean':
+            self.score_pairs = self.score_pairs_sqeuclidean
+        else:
+            raise ValueError(f'Unknown energy {energy}')
+
+    def score_pairs_kldiv(self, embs, nodes_x, nodes_y):
         """
-        Computes the energy of a set of node pairs as the KL divergence between their respective Gaussian embeddings.
+        Computes the energy of a set of node pairs as the KL divergence between
+        their respective Gaussian embeddings.
 
         Parameters
         ----------
@@ -384,8 +351,29 @@ class G2G(nn.Module):
 
         return -0.5 * (trace_fac + mu_diff_sq - L - log_det)
 
-    def forward(self, data, edge_index, hop_pos, hop_neg):
-        embs = self.encoder(data)
+    def score_pairs_sqeuclidean(self, embs, nodes_x, nodes_y):
+        """
+        Computes the energy of a set of node pairs as the KL divergence between
+        their respective Gaussian embeddings.
+
+        Parameters
+        ----------
+        pairs : array-like, shape [?, 2]
+            The edges/non-edges for which the energy is calculated
+
+        Returns
+        -------
+        energy : array-like, shape [?]
+            The energy of each pair given the currently learned model
+        """
+        mu, _ = embs
+        mu_x, mu_y = mu[nodes_x], mu[nodes_y]
+        dist = torch.sum((mu_x - mu_y)**2, dim=1)
+
+        return -dist
+
+    def forward(self, x, edge_index, hop_pos, hop_neg):
+        embs = self.encoder(x, edge_index)
 
         pos_energy = -self.score_pairs(embs, hop_pos[0], hop_pos[1])
         neg_energy = -self.score_pairs(embs, hop_neg[0], hop_neg[1])

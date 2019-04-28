@@ -362,18 +362,18 @@ def score_node_classification_sets(features, targets, model_class, device_str, p
     split_train, split_test = next(sss.split(features, targets))
 
     net = NeuralNetClassifier(model_class, module__in_features=emb_dim,
-                                    module__n_classes=n_classes,
-                                    criterion=torch.nn.CrossEntropyLoss,
-                                    device=device_str, max_epochs=100,
-                                    verbose=0, optimizer=torch.optim.Adam,
-                                    iterator_train__shuffle=True,
-                                    batch_size=len(split_train))
+                              module__n_classes=n_classes,
+                              criterion=torch.nn.CrossEntropyLoss,
+                              device=device_str, max_epochs=100,
+                              verbose=1, optimizer=torch.optim.Adam,
+                              iterator_train__shuffle=True,
+                              batch_size=len(split_train))
     params = {
         'lr': [1e-3, 1e-2, 1e-1]
     }
     gs = GridSearchCV(net, params, cv=2, scoring='accuracy')
 
-    print('Training link prediction model')
+    print('Training node classification model')
     gs.fit(features[split_train], targets[split_train])
 
     print('Best parameters: ', gs.best_params_)
