@@ -3,6 +3,7 @@ import os
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch_geometric.nn import GCNConv, MessagePassing
 from torch_geometric.nn.inits import glorot
 import numpy as np
@@ -213,7 +214,7 @@ class SGE(nn.Module):
 
     def score_pairs(self, embs, nodes_x, nodes_y):
         return -self.sinkhorn(embs[nodes_x].reshape(-1, self.n_points, self.space_dim),
-                             embs[nodes_y].reshape(-1, self.n_points, self.space_dim))
+                              embs[nodes_y].reshape(-1, self.n_points, self.space_dim))
 
     def forward(self, data, edges_pos, edges_neg):
         z = self.encoder(data, edges_pos)
@@ -284,17 +285,17 @@ class Node2Vec(nn.Module):
         self.encoder = LookupEncoder(all_embs)
 
 
-class G2G(nn.Module):
+class G2GTf(nn.Module):
     def __init__(self, data, encoder, n_hidden, dim, train_ones, val_ones,
                  val_zeros, test_ones, test_zeros, epochs, lr, K,
                  link_prediction, energy='sqeuclidean'):
-        super(G2G, self).__init__()
+        super(G2GTf, self).__init__()
 
-        train_ones = train_ones.cpu().numpy().T
-
+        # FIXME
         A = adj_from_edge_index(data.edge_index)
-        X = sp.csr_matrix(data.x.cpu().numpy())
 
+        X = sp.csr_matrix(data.x.cpu().numpy())
+        train_ones = train_ones.cpu().numpy().T
         if link_prediction:
             val_ones = val_ones.cpu().numpy().T
             val_zeros = val_zeros.cpu().numpy().T
@@ -325,6 +326,69 @@ class G2G(nn.Module):
             test_auc, test_ap = None, None
 
         self.test_auc, self.test_ap = test_auc, test_ap
+
+
+class G2GEncoder(nn.Module):
+    def __init__(self, num_features, dimensions):
+        super(G2GEncoder, self).__init__()
+
+        self.linear = nn.Linear(in_features=num_features,
+                                out_features=dimensions[0])
+        self.linear_mu = nn.Linear(in_features=dimensions[0],
+                                   out_features=dimensions[1])
+        self.linear_logsigma = nn.Linear(in_features=dimensions[0],
+                                         out_features=dimensions[1])
+
+    def forward(self, data, *args):
+        out = F.relu(self.linear(data.x))
+        mu = self.linear_mu(out)
+        sigma = F.elu(self.linear_logsigma(out)) + 1 + 1e-14
+
+        return torch.stack((mu, sigma), dim=0)
+
+
+class G2G(nn.Module):
+    def __init__(self, encoder, *args):
+        super(G2G, self).__init__()
+        self.encoder = encoder
+
+    def score_pairs(self, embs, nodes_x, nodes_y):
+        """
+        Computes the energy of a set of node pairs as the KL divergence between their respective Gaussian embeddings.
+
+        Parameters
+        ----------
+        pairs : array-like, shape [?, 2]
+            The edges/non-edges for which the energy is calculated
+
+        Returns
+        -------
+        energy : array-like, shape [?]
+            The energy of each pair given the currently learned model
+        """
+        mu, sigma = embs
+        L = mu.shape[1]
+        mu_x, mu_y = mu[nodes_x], mu[nodes_y]
+        sigma_x, sigma_y = sigma[nodes_x], sigma[nodes_y]
+
+        sigma_ratio = sigma_y / sigma_x
+        trace_fac = sigma_ratio.sum(dim=1)
+        log_det = torch.log(sigma_ratio + 1e-14).sum(dim=1)
+
+        mu_diff_sq = (mu_x - mu_y)**2 / sigma_x
+        mu_diff_sq = mu_diff_sq.sum(dim=1)
+
+        return -0.5 * (trace_fac + mu_diff_sq - L - log_det)
+
+    def forward(self, data, edge_index, hop_pos, hop_neg):
+        embs = self.encoder(data)
+
+        pos_energy = -self.score_pairs(embs, hop_pos[0], hop_pos[1])
+        neg_energy = -self.score_pairs(embs, hop_neg[0], hop_neg[1])
+
+        loss = (pos_energy ** 2 + torch.exp(-neg_energy)).mean()
+
+        return loss
 
 
 class NodeClassifier(nn.Module):
