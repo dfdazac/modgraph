@@ -212,13 +212,13 @@ class SGE(nn.Module):
         # loss = (pos_energy - torch.log(1 - torch.exp(-neg_energy)) + 1e-8).mean()
 
         # Square exponential loss
-        #loss = (pos_energy**2 + torch.exp(-neg_energy)).mean()
+        loss = (pos_energy**2 + torch.exp(-neg_energy)).mean()
 
         # Square-square loss
-        m = 1.5
-        margin_diff = m - neg_energy
-        margin_diff[margin_diff < 0] = 0
-        loss = torch.mean(pos_energy**2) + torch.mean(margin_diff**2)
+        #m = 1.5
+        #margin_diff = m - neg_energy
+        #margin_diff[margin_diff < 0] = 0
+        #loss = torch.mean(pos_energy**2) + torch.mean(margin_diff**2)
 
         # Hinge loss
         # m = 2
@@ -433,7 +433,7 @@ class BilinearScore(nn.Module):
 
 
 class DeepSetClassifier(nn.Module):
-    def __init__(self, in_features, n_classes):
+    def __init__(self, in_features, n_classes, drop1, drop2):
         super(DeepSetClassifier, self).__init__()
 
         self.mlp = nn.Sequential(nn.Linear(in_features, in_features),
@@ -441,13 +441,14 @@ class DeepSetClassifier(nn.Module):
                                  nn.Linear(in_features, in_features),
                                  nn.ReLU())
         self.linear_out = nn.Linear(in_features, n_classes)
-        self.dropout = nn.Dropout(0.2)
+        self.dropout1 = nn.Dropout(drop1)
+        self.dropout2 = nn.Dropout(drop2)
 
     def forward(self, x):
         out = self.mlp(x)
         out, _ = torch.max(out, dim=1)
-        out = self.dropout(out)
+        out = self.dropout1(out)
         out = self.linear_out(out)
-        out = self.dropout(out)
+        out = self.dropout2(out)
 
         return out

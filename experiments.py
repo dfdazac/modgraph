@@ -21,23 +21,25 @@ if not args.log:
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 # Configuration template
-config = {'dataset_str': 'cora',
-          'method': 'sge',
-          'encoder_str': None,
+config = {'dataset_str': None,
+          'method': None,
+          'encoder_str': 'gcngauss',
           'hidden_dims': [256, 128],
-          'n_points': None,
+          'n_points': 4,
           'lr': None,
           'epochs': 200,
           'p_labeled': 0.1,
-          'n_exper': 1,
+          'n_exper': 20,
           'device': device,
           'timestamp': str(int(time.time())),
           'edge_score': 'inner'}
 
 # Values to be changed in experiments
-param_grid = {'encoder_str': ['mlp', 'gcn', 'sgc'],
-              'n_points': [1, 4, 16, 32],
-              'lr': [1e-2, 1e-3, 1e-4]}
+param_grid = {'method': ['graph2gauss', 'graph2vec'],
+              'dataset_str': ['cora', 'citeseer', 'pubmed', 'corafull',
+                              'coauthorcs', 'coauthorphys', 'amazoncomp',
+                              'amazonphoto'],
+              'lr': [1e-3, 1e-4, 5e-5]}
 
 grid = ParameterGrid(param_grid)
 

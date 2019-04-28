@@ -225,7 +225,7 @@ def config():
     method = 'sge'
     encoder_str = 'mlp'
     hidden_dims = [256, 128]
-    n_points = 4 #93.0, 92.8
+    n_points = 4
     lr = 0.001
     epochs = 200
     p_labeled = 0.1

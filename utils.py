@@ -365,11 +365,14 @@ def score_node_classification_sets(features, targets, model_class, device_str, p
                               module__n_classes=n_classes,
                               criterion=torch.nn.CrossEntropyLoss,
                               device=device_str, max_epochs=100,
-                              verbose=1, optimizer=torch.optim.Adam,
+                              verbose=0, optimizer=torch.optim.Adam,
                               iterator_train__shuffle=True,
                               batch_size=len(split_train))
     params = {
-        'lr': [1e-3, 1e-2, 1e-1]
+        'lr': [1e-3, 1e-2, 1e-1],
+        'module__drop1': [0, 0.2, 0.5],
+        'module__drop2': [0, 0.2, 0.5],
+        'optimizer__weight_decay': [0, 1e-4, 1e-3]
     }
     gs = GridSearchCV(net, params, cv=2, scoring='accuracy')
 
