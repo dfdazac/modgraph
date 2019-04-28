@@ -28,14 +28,8 @@ class MLPEncoder(nn.Module):
             # FIXME
             #self.layers.append(nn.ReLU(hidden_dims[i]))
 
-    def forward(self, data, edge_index, corrupt=False):
-        if corrupt:
-            perm = torch.randperm(data.num_nodes)
-            x = data.x[perm]
-        else:
-            x = data.x
-
-        z = self.layers[1](self.layers[0](x))
+    def forward(self, data, edge_index):
+        z = self.layers[1](self.layers[0](data.x))
 
         for i in range(2, len(self.layers), 2):
             # FIXME
@@ -59,14 +53,8 @@ class GCNEncoder(nn.Module):
             # FIXME
             #self.layers.append(nn.ReLU())
 
-    def forward(self, data, edge_index, corrupt=False):
-        if corrupt:
-            perm = torch.randperm(data.num_nodes)
-            x = data.x[perm]
-        else:
-            x = data.x
-
-        z = self.layers[1](self.layers[0](x, edge_index))
+    def forward(self, data, edge_index):
+        z = self.layers[1](self.layers[0](data.x, edge_index))
 
         for i in range(2, len(self.layers), 2):
             # FIXME
@@ -148,15 +136,8 @@ class SGCEncoder(nn.Module):
         self.layer = SGConv(input_feat_dim, out_channels, K, cached=True,
                             bias=False)
 
-    def forward(self, data, edge_index, corrupt=False):
-        if corrupt:
-            perm = torch.randperm(data.num_nodes)
-            x = data.x[perm]
-        else:
-            x = data.x
-
-        z = self.layer(x, edge_index)
-
+    def forward(self, data, edge_index):
+        z = self.layer(data.x, edge_index)
         return z
 
 
@@ -186,8 +167,8 @@ class DGI(nn.Module):
         return (embs[nodes_x] * embs[nodes_y]).sum(dim=1)
 
     def forward(self, data, edges_pos, edges_neg):
-        positive = self.encoder(data, edges_pos, corrupt=False)
-        negative = self.encoder(data, edges_pos, corrupt=True)
+        positive = self.encoder(data, edges_pos)
+        negative = self.encoder(data, edges_neg)
         summary = torch.sigmoid(positive.mean(dim=0))
 
         positive = self.discriminator(positive, summary)

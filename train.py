@@ -16,7 +16,7 @@ from utils import (get_data, get_data_splits, sample_edges,
 from models import (MLPEncoder, GCNEncoder, SGCEncoder, GAE, DGI, Node2Vec,
                     G2G, InnerProductScore, BilinearScore, SGE,
                     DeepSetClassifier)
-from samplers import FirstNeighborSampling, make_sample_iterator
+from samplers import make_sample_iterator, FirstNeighborSampling, GraphCorruptionSampling
 
 
 def train_encoder(dataset_str, method, encoder_str, dimensions, n_points, lr, epochs,
@@ -72,8 +72,9 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, n_points, lr, ep
     train_pos, val_pos, test_pos = pos_split
     train_neg_all, val_neg, test_neg = neg_split
 
-    train_sampler = FirstNeighborSampling(epochs, train_pos, train_neg_all,
-                                          resample_neg_edges)
+    #train_sampler = FirstNeighborSampling(epochs, train_pos, train_neg_all,
+    #                                      resample_neg_edges)
+    train_sampler = GraphCorruptionSampling(epochs, train_pos, data.num_nodes)
     train_iter = make_sample_iterator(train_sampler, num_workers=1)
 
     # Train model
@@ -123,8 +124,7 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, n_points, lr, ep
 
             elif epoch % 50 == 0:
                 log = '[{:03d}/{:03d}] train loss: {:.6f}'
-                print(log.format(epoch, epochs, loss.item()), end='',
-                      flush=True)
+                print(log.format(epoch, epochs, loss.item()))
 
         if not link_prediction and method != 'gae':
             # Save the last state
@@ -209,7 +209,7 @@ def config():
         {'inner', 'bilinear'}
     """
     dataset_str = 'cora'
-    method = 'gae'
+    method = 'dgi'
     encoder_str = 'sgc'
     hidden_dims = [256, 128]
     n_points = 16

@@ -45,11 +45,13 @@ class RankedSampling(NodeSampling):
 
 
 class GraphCorruptionSampling(NodeSampling):
-    def __init__(self):
-        raise NotImplementedError
+    def __init__(self, iters, edge_index, num_nodes):
+        super(GraphCorruptionSampling, self).__init__(iters, edge_index)
+        self.num_nodes = num_nodes
 
     def __getitem__(self, item):
-        raise NotImplementedError
+        perm = torch.randperm(self.num_nodes)
+        return self.edge_index, perm[self.edge_index]
 
 
 def simple_collate_fn(batch):
