@@ -1,4 +1,5 @@
 import os.path as osp
+import itertools
 from torch_geometric.datasets import Planetoid
 from gnnbench import GNNBenchmark
 import numpy as np
@@ -191,34 +192,6 @@ def sample_edges(edge_index, n_samples, seed):
     np.random.seed(seed)
     rand_idx = np.random.choice(np.arange(N), n_samples, replace=False)
     return edge_index[:, rand_idx]
-
-
-def inner_product_scores(emb, edges_pos, edges_neg):
-    """Evaluate the AUC and AP scores when using the provided embeddings to
-    predict links between nodes.
-
-    Args:
-        emb: tensor of shape (N, d) where N is the number of nodes and d
-            the dimension of the embeddings.
-        edges_pos, edges_neg: tensors of shape (2, p) containing positive
-        and negative edges, respectively, in their columns.
-
-    Returns:
-        auc_score, float
-        ap_score, float
-    """
-    # Get scores for edges using inner product
-    pos_score = (emb[edges_pos[0]] * emb[edges_pos[1]]).sum(dim=1)
-    neg_score = (emb[edges_neg[0]] * emb[edges_neg[1]]).sum(dim=1)
-    preds = torch.cat((pos_score, neg_score)).cpu().numpy()
-
-    targets = torch.cat((torch.ones_like(pos_score),
-                         torch.zeros_like(neg_score))).cpu().numpy()
-
-    auc_score = roc_auc_score(targets, preds)
-    ap_score = average_precision_score(targets, preds)
-
-    return auc_score, ap_score
 
 
 def link_prediction_scores(pos_score, neg_score):
@@ -451,3 +424,143 @@ def get_data_splits(dataset_str, neg_sample_mult, link_prediction,
     neg_split = [train_neg_all, val_neg, test_neg]
 
     return data, pos_split, neg_split
+
+
+def get_hops(A, K=1):
+    """
+    Calculates the K-hop neighborhoods of the nodes in a graph.
+
+    Parameters
+    ----------
+    A : scipy.sparse.spmatrix
+        The graph represented as a sparse matrix
+    K : int
+        The maximum hopness to consider.
+
+    Returns
+    -------
+    hops : dict
+        A dictionary where each 1, 2, ... K, neighborhoods are saved as sparse
+        matrices
+    """
+    hops = {1: A.tolil(), -1: A.tolil()}
+    hops[1].setdiag(0)
+
+    for h in range(2, K + 1):
+        # compute the next ring
+        next_hop = hops[h - 1].dot(A)
+        next_hop[next_hop > 0] = 1
+
+        # make sure that we exclude visited n/edges
+        for prev_h in range(1, h):
+            next_hop -= next_hop.multiply(hops[prev_h])
+
+        next_hop = next_hop.tolil()
+        next_hop.setdiag(0)
+
+        hops[h] = next_hop
+        hops[-1] += next_hop
+
+    return hops
+
+
+def to_triplets(sampled_hops):
+    """
+    Form all valid triplets (pairwise constraints) from a set of sampled nodes in triplets
+
+    Parameters
+    ----------
+    sampled_hops : array-like, shape [N, K]
+       The sampled nodes.
+    scale_terms : dict
+        The appropriate up-scaling terms to ensure unbiased estimates for each neighbourhood
+
+    Returns
+    -------
+    triplets : array-like, shape [?, 3]
+       The transformed triplets.
+    """
+    triplets = []
+
+    for i, j in itertools.combinations(np.arange(1, sampled_hops.shape[1]), 2):
+        triplet = sampled_hops[:, [0] + [i, j]]
+        triplet = triplet[(triplet[:, 1] != -1) & (triplet[:, 2] != -1)]
+        triplet = triplet[(triplet[:, 0] != triplet[:, 1]) & (triplet[:, 0] != triplet[:, 2])]
+        triplets.append(triplet)
+
+    return np.row_stack(triplets)
+
+
+def sample_last_hop(A, nodes):
+    """
+    For each node in nodes samples a single node from their last (K-th)
+    neighborhood.
+
+    Parameters
+    ----------
+    A : scipy.sparse.spmatrix
+        Sparse matrix encoding which nodes belong to any of the 1, 2, ..., K-1,
+        neighborhoods of every node
+    nodes : array-like, shape [N]
+        The nodes to consider
+
+    Returns
+    -------
+    sampled_nodes : array-like, shape [N]
+        The sampled nodes.
+    """
+    N = A.shape[0]
+
+    # Sample any nodes at random
+    sampled = np.random.randint(0, N, len(nodes))
+
+    # For all rows, select sampled columns.
+    # Count how many entries are nonzero in any of the 1, ..., K neighborhoods
+    nnz = A[nodes, sampled].nonzero()[1]
+    while len(nnz) != 0:
+        # If there are still nonzero entries, generate samples again
+        # BUT ONLY for those that were nonzero before (hence size=len(nnz))
+        new_sample = np.random.randint(0, N, len(nnz))
+        # Replace those samples that generated nonzero entries
+        sampled[nnz] = new_sample
+        # Count nonzeros again
+        nnz = A[nnz, new_sample].nonzero()[1]
+
+    # The returned sampled nodes are neighbors that are not in any of the
+    # the 1, 2, ... K neighborhoods
+    return sampled
+
+
+def sample_all_hops(hops, nodes=None):
+    """
+    For each node in nodes samples a single node from all of their
+    neighborhoods.
+
+    Parameters
+    ----------
+    hops : dict
+        A dictionary where each 1, 2, ... K, neighborhoods are saved as sparse
+        matrices
+    nodes : array-like, shape [N]
+        The nodes to consider
+
+    Returns
+    -------
+    sampled_nodes : array-like, shape [N, K]
+        The sampled nodes.
+    """
+
+    N = hops[1].shape[0]
+
+    if nodes is None:
+        nodes = np.arange(N)
+
+    return np.vstack((nodes,
+                      np.array([[-1 if len(x) == 0 else np.random.choice(x) for x in hops[h].rows[nodes]]
+                                for h in hops.keys() if h != -1]),
+                      sample_last_hop(hops[-1], nodes)
+                      )).T
+
+
+def sample_triplets(hops):
+    return to_triplets(sample_all_hops(hops))

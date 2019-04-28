@@ -167,7 +167,7 @@ class DGI(nn.Module):
     def score_pairs(self, embs, nodes_x, nodes_y):
         return (embs[nodes_x] * embs[nodes_y]).sum(dim=1)
 
-    def forward(self, data, edges_pos, edges_neg):
+    def forward(self, data, edge_index, edges_pos, edges_neg):
         positive = self.encoder(data, edges_pos)
         negative = self.encoder(data, edges_neg)
         summary = torch.sigmoid(positive.mean(dim=0))
@@ -190,7 +190,11 @@ class GAE(nn.Module):
     def score_pairs(self, embs, nodes_x, nodes_y):
         return (embs[nodes_x] * embs[nodes_y]).sum(dim=1)
 
-    def forward(self, data, edges_pos, edges_neg):
+    def forward(self, data, edge_index, edges_pos, edges_neg):
+        device = next(self.parameters()).device
+        edges_pos = edges_pos.to(device)
+        edges_neg = edges_neg.to(device)
+
         z = self.encoder(data, edges_pos)
         # Get scores for edges using inner product
         pos_score = (z[edges_pos[0]] * z[edges_pos[1]]).sum(dim=1)
@@ -216,7 +220,7 @@ class SGE(nn.Module):
         return -self.sinkhorn(embs[nodes_x].reshape(-1, self.n_points, self.space_dim),
                               embs[nodes_y].reshape(-1, self.n_points, self.space_dim))
 
-    def forward(self, data, edges_pos, edges_neg):
+    def forward(self, data, edge_index, edges_pos, edges_neg):
         z = self.encoder(data, edges_pos)
         pos_energy = -self.score_pairs(z, edges_pos[0], edges_pos[1])
         neg_energy = -self.score_pairs(z, edges_neg[0], edges_neg[1])

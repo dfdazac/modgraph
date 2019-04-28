@@ -1,21 +1,18 @@
 import os.path as osp
 import os
 import time
-import gc
 
 import torch
-from torch.utils.data import DataLoader
 import numpy as np
 from sacred import Experiment
 from sacred.observers import MongoObserver
 
-from utils import (get_data, get_data_splits, sample_edges,
-                   inner_product_scores, score_node_classification,
+from utils import (get_data, get_data_splits,
+                   score_node_classification,
                    score_link_prediction, link_prediction_scores,
                    score_node_classification_sets)
 from models import (MLPEncoder, GCNEncoder, SGCEncoder, GAE, DGI, Node2Vec,
-                    G2G, InnerProductScore, BilinearScore, SGE,
-                    DeepSetClassifier, G2GTf, G2GEncoder)
+                    G2G, BilinearScore, SGE, DeepSetClassifier, G2GEncoder)
 from samplers import make_sample_iterator, FirstNeighborSampling, GraphCorruptionSampling, RankedSampling
 
 
@@ -28,7 +25,7 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, n_points, lr, ep
         encoder_class = GCNEncoder
     elif encoder_str == 'sgc':
         encoder_class = SGCEncoder
-    elif encoder_str == 'g2genc':
+    elif encoder_str == 'mlpgauss':
         encoder_class = G2GEncoder
     else:
         raise ValueError(f'Unknown encoder {encoder_str}')
@@ -39,17 +36,17 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, n_points, lr, ep
         model_class = GAE
     elif method == 'sge':
         model_class = SGE
-    elif method == 'graph2gausspy':
+    elif method == 'graph2gauss':
         model_class = G2G
-    elif method in ['node2vec', 'graph2gauss', 'raw']:
+    elif method in ['node2vec', 'raw']:
         model_class = None
     else:
-        raise ValueError(f'Unknown model {method}')
+        raise ValueError(f'Unknown method {method}')
 
     if edge_score == 'inner':
-        score_class = InnerProductScore
+        edge_score_class = None
     elif edge_score == 'bilinear':
-        score_class = BilinearScore
+        edge_score_class = BilinearScore
     else:
         raise ValueError(f'Unknown edge score {edge_score}')
 
@@ -60,7 +57,7 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, n_points, lr, ep
     device = torch.device(device_str)
 
     # Load and split data
-    if not link_prediction and method in ['gae', 'sge']:
+    if not link_prediction and method == 'gae':
         neg_sample_mult = 10
         resample_neg_edges = True
         # GAE objective is link prediction
@@ -74,17 +71,23 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, n_points, lr, ep
                                                  link_prediction,
                                                  add_self_connections, seed)
     train_pos, val_pos, test_pos = pos_split
-    train_neg_all, val_neg, test_neg = neg_split
+    train_neg, val_neg, test_neg = neg_split
 
-    # train_sampler = FirstNeighborSampling(epochs, train_pos, train_neg_all,
-    #                                      resample_neg_edges)
-    # train_sampler = GraphCorruptionSampling(epochs, train_pos, data.num_nodes)
-    train_sampler = RankedSampling(epochs, train_pos)
+    if method == 'gae':
+        train_sampler = FirstNeighborSampling(epochs, train_pos, train_neg, resample_neg_edges)
+    elif method == 'dgi':
+        train_sampler = GraphCorruptionSampling(epochs, train_pos, data.num_nodes)
+    elif method == 'graph2gauss':
+        train_sampler = RankedSampling(epochs, train_pos)
+    else:
+        raise ValueError(f'Sampling strategy undefined for method {method}')
+
     train_iter = make_sample_iterator(train_sampler, num_workers=1)
 
     # Train model
-    if method in ['gae', 'dgi', 'sge', 'graph2gausspy']:
+    if method in ['gae', 'dgi', 'sge', 'graph2gauss']:
         data.x = data.x.to(device)
+        edge_index = train_pos.to(device)
 
         num_features = data.x.shape[1]
         encoder = encoder_class(num_features, dimensions)
@@ -101,20 +104,17 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, n_points, lr, ep
             model.train()
             optimizer.zero_grad()
 
-            # train_pos, train_neg = next(train_iter)
-            # train_pos = train_pos.to(device)
-            # train_neg = train_neg.to(device)
-            #
-            # loss = model(data, train_pos, train_neg)
-            train_neg = None
-            edge_index, hop_pos, hop_neg = next(train_iter)
-            loss = model(data, edge_index, hop_pos, hop_neg)
+            pos_samples, neg_samples = next(train_iter)
+            pos_samples = pos_samples.to(device)
+            neg_samples = neg_samples.to(device)
+
+            loss = model(data, edge_index, pos_samples, neg_samples)
             loss.backward()
             optimizer.step()
 
-            if link_prediction or method in ['gae', 'sge', 'graph2gausspy']:
+            if link_prediction or method in ['gae', 'sge']:
                 # Evaluate on val edges
-                embeddings = model.encoder(data, train_pos).detach().cpu()
+                embeddings = model.encoder(data, edge_index).detach().cpu()
                 pos_scores = model.score_pairs(embeddings, val_pos[0], val_pos[1])
                 neg_scores = model.score_pairs(embeddings, val_neg[0], val_neg[1])
 
@@ -138,17 +138,13 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, n_points, lr, ep
             # Save the last state
             torch.save(model.state_dict(), ckpt_name)
 
-        # Evaluate on test edges
+        # Load best checkpoint
         model.load_state_dict(torch.load(ckpt_name))
         os.remove(ckpt_name)
     elif method == 'node2vec':
         path = osp.join(osp.dirname(osp.realpath(__file__)), 'node2vec',
                         'data')
         model = Node2Vec(train_pos, path, data.num_nodes)
-    elif method == 'graph2gauss':
-        model = G2GTf(data, encoder_str, dimensions[:-1], dimensions[-1],
-                    train_pos, val_pos, val_neg, test_pos, test_neg, epochs,
-                    lr, K=1, link_prediction=link_prediction)
     else:
         model = None
 
@@ -156,26 +152,25 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, n_points, lr, ep
         embeddings = data.x
     else:
         model.eval()
-        embeddings = model.encoder(data, train_pos).detach().cpu()
+        embeddings = model.encoder(data, edge_index).detach().cpu()
 
     if link_prediction:
-        if method == 'graph2gauss':
-            # graph2gauss link prediction is already evaluated with the KL div
-            auc, ap = model.test_auc, model.test_ap
-        elif method in ['gae', 'graph2gausspy', 'sge']:
+        if edge_score_class is None:
+            # Use method score for link prediction
             pos_scores = model.score_pairs(embeddings, test_pos[0], test_pos[1])
             neg_scores = model.score_pairs(embeddings, test_neg[0], test_neg[1])
             auc, ap = link_prediction_scores(pos_scores, neg_scores)
         else:
+            if method == 'graph2gauss':
+                embeddings = embeddings[0]
+
+            # Train a custom link predictor
             train_pos = train_pos.cpu()
             train_neg = train_neg.cpu()
-            if score_class is not InnerProductScore:
-                train_val_pos = torch.cat((train_pos, val_pos), dim=-1)
-                train_val_neg = torch.cat((train_neg, val_neg), dim=-1)
-            else:
-                train_val_pos, train_val_neg = None, None
+            train_val_pos = torch.cat((train_pos, val_pos), dim=-1)
+            train_val_neg = torch.cat((train_neg, val_neg), dim=-1)
 
-            auc, ap = score_link_prediction(score_class, embeddings,
+            auc, ap = score_link_prediction(edge_score_class, embeddings,
                                             test_pos, test_neg, device_str,
                                             train_val_pos, train_val_neg,
                                             seed)
@@ -183,6 +178,10 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, n_points, lr, ep
         print('test_auc: {:6f}, test_ap: {:6f}'.format(auc, ap))
     else:
         auc, ap = None, None
+
+    if method == 'graph2gauss':
+        # Use the mean for downstream tasks
+        embeddings = embeddings[0]
 
     return embeddings, np.array([auc, ap])
 
@@ -216,8 +215,8 @@ def config():
         {'inner', 'bilinear'}
     """
     dataset_str = 'cora'
-    method = 'graph2gausspy'
-    encoder_str = 'g2genc'
+    method = 'dgi'
+    encoder_str = 'gcn'
     hidden_dims = [256, 128]
     n_points = 16
     lr = 0.001
