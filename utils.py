@@ -1,7 +1,6 @@
 import os.path as osp
 import itertools
-from torch_geometric.datasets import Planetoid
-from gnnbench import GNNBenchmark
+from torch_geometric.datasets import Planetoid, CoraFull, Coauthor, Amazon
 import numpy as np
 import scipy.sparse as sp
 import torch
@@ -325,11 +324,9 @@ def score_node_classification(features, targets, p_labeled=0.1, seed=0):
     lrcv.fit(features[split_train], targets[split_train])
     predicted = lrcv.predict(features[split_test])
 
-    f1_micro = f1_score(targets[split_test], predicted, average='micro')
-    f1_macro = f1_score(targets[split_test], predicted, average='macro')
     accuracy = accuracy_score(targets[split_test], predicted)
 
-    return f1_micro, f1_macro, accuracy
+    return accuracy
 
 
 def score_node_classification_sets(features, targets, model_class, device_str, p_labeled=0.1, seed=0):
@@ -395,9 +392,16 @@ def get_data(dataset_str):
 
     if dataset_str in ('cora', 'citeseer', 'pubmed'):
         dataset = Planetoid(path, dataset_str)
-    elif dataset_str in ('corafull', 'coauthorcs', 'coauthorphys',
-                         'amazoncomp', 'amazonphoto'):
-        dataset = GNNBenchmark(path, dataset_str)
+    elif dataset_str == 'corafull':
+        dataset = CoraFull(path)
+    elif dataset_str == 'coauthorcs':
+        dataset = Coauthor(path, name='CS')
+    elif dataset_str == 'coauthorphys':
+        dataset = Coauthor(path, name='Physics')
+    elif dataset_str == 'amazoncomp':
+        dataset = Amazon(path, name='Computers')
+    elif dataset_str == 'amazonphoto':
+        dataset = Amazon(path, name='Photo')
     else:
         raise ValueError(f'Unknown dataset {dataset_str}')
 

@@ -222,12 +222,12 @@ def config():
     edge_score (str): scoring function used for link prediction. One of
         {'inner', 'bilinear'}
     """
-    dataset_str = 'amazoncomp'
+    dataset_str = 'amazonphoto'
     method = 'gae'
     encoder_str = 'sgc'
     hidden_dims = [256, 128]
     n_points = 4
-    lr = 0.001
+    lr = 0.01
     epochs = 200
     p_labeled = 0.1
     n_exper = 20
