@@ -212,13 +212,12 @@ class SGE(nn.Module):
         # loss = (pos_energy - torch.log(1 - torch.exp(-neg_energy)) + 1e-8).mean()
 
         # Square exponential loss
-        loss = (pos_energy**2 + torch.exp(-neg_energy)).mean()
+        # loss = (pos_energy**2 + torch.exp(-neg_energy)).mean()
 
         # Square-square loss
-        #m = 1.5
-        #margin_diff = m - neg_energy
-        #margin_diff[margin_diff < 0] = 0
-        #loss = torch.mean(pos_energy**2) + torch.mean(margin_diff**2)
+        margin_diff = 1.0 - neg_energy
+        margin_diff[margin_diff < 0] = 0.0
+        loss = torch.mean(pos_energy**2) + torch.mean(margin_diff**2)
 
         # Hinge loss
         # m = 2
@@ -306,6 +305,25 @@ class GCNGaussianEncoder(nn.Module):
         out = F.relu(self.gcn_in(x, edge_index))
         mu = self.gcn_mu(out, edge_index)
         sigma = F.elu(self.gcn_logsigma(out, edge_index)) + 1 + 1e-14
+
+        return torch.stack((mu, sigma), dim=0)
+
+
+class GCNMLPGaussianEncoder(nn.Module):
+    def __init__(self, in_features, hidden_dims, *args):
+        super(GCNMLPGaussianEncoder, self).__init__()
+
+        self.gcn_in = GCNConv(in_channels=in_features,
+                              out_channels=hidden_dims[0])
+        self.linear_mu = nn.Linear(in_features=hidden_dims[0],
+                                out_features=hidden_dims[1])
+        self.linear_logsigma = nn.Linear(in_features=hidden_dims[0],
+                                      out_features=hidden_dims[1])
+
+    def forward(self, x, edge_index):
+        out = F.relu(self.gcn_in(x, edge_index))
+        mu = self.linear_mu(out)
+        sigma = F.elu(self.linear_logsigma(out)) + 1 + 1e-14
 
         return torch.stack((mu, sigma), dim=0)
 
