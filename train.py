@@ -222,9 +222,9 @@ def config():
     edge_score (str): scoring function used for link prediction. One of
         {'inner', 'bilinear'}
     """
-    dataset_str = 'cora'
-    method = 'sge'
-    encoder_str = 'mlp'
+    dataset_str = 'amazoncomp'
+    method = 'gae'
+    encoder_str = 'sgc'
     hidden_dims = [256, 128]
     n_points = 4
     lr = 0.001
@@ -296,14 +296,14 @@ def node_class_experiments(dataset_str, method, encoder_str, hidden_dims,
         labels = data.y.cpu().numpy()
         if method == 'sge':
             embeddings = embeddings.numpy()
-            scores = score_node_classification_sets(embeddings, labels,
-                                                    models.DeepSetClassifier,
-                                                    device, p_labeled, seed=i)
+            test_acc = score_node_classification_sets(embeddings, labels,
+                                                      models.DeepSetClassifier,
+                                                      device, p_labeled,
+                                                      seed=i)
         else:
-            scores = score_node_classification(embeddings, labels, p_labeled,
-                                               seed=i)
+            test_acc = score_node_classification(embeddings, labels, p_labeled,
+                                                 seed=i)
 
-        test_acc = scores[2]
         print('test_acc: {:.6f}'.format(test_acc))
         results[i] = test_acc
 
