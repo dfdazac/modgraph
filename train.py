@@ -1,6 +1,6 @@
 import os.path as osp
 import os
-import time
+from datetime import datetime
 
 import torch
 import numpy as np
@@ -131,14 +131,17 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, n_points, lr,
                     best_auc = auc
                     torch.save(model.state_dict(), ckpt_name)
 
-                if epoch % 50 == 0:
-                    log = ('[{:03d}/{:03d}] train loss: {:.6f}, '
+                if epoch % 20 == 0:
+                    time = datetime.now().strftime("%Y-%m-%d %H:%M")
+                    log = ('[{}] [{:03d}/{:03d}] train loss: {:.6f}, '
                            'val_auc: {:6f}, val_ap: {:6f}')
-                    print(log.format(epoch, epochs, loss.item(), auc, ap))
+                    print(log.format(time, epoch, epochs, loss.item(),
+                                     auc, ap))
 
-            elif epoch % 50 == 0:
-                log = '[{:03d}/{:03d}] train loss: {:.6f}'
-                print(log.format(epoch, epochs, loss.item()))
+            elif epoch % 20 == 0:
+                time = datetime.now().strftime("%Y-%m-%d %H:%M")
+                log = '[{}] [{:03d}/{:03d}] train loss: {:.6f}'
+                print(log.format(time, epoch, epochs, loss.item()))
 
         if not link_prediction and method != 'gae':
             # Save the last state
@@ -222,17 +225,17 @@ def config():
     edge_score (str): scoring function used for link prediction. One of
         {'inner', 'bilinear'}
     """
-    dataset_str = 'amazonphoto'
-    method = 'gae'
-    encoder_str = 'sgc'
+    dataset_str = 'cora'
+    method = 'sge'
+    encoder_str = 'mlp'
     hidden_dims = [256, 128]
-    n_points = 4
+    n_points = 8
     lr = 0.01
     epochs = 200
     p_labeled = 0.1
     n_exper = 20
     device = 'cuda'
-    timestamp = str(int(time.time()))
+    timestamp = str(int(datetime.now().timestamp()))
     edge_score = 'inner'
 
 

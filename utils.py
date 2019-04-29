@@ -380,11 +380,9 @@ def score_node_classification_sets(features, targets, model_class, device_str, p
     model = gs.best_estimator_
     predicted = model.predict(features[split_test])
 
-    f1_micro = f1_score(targets[split_test], predicted, average='micro')
-    f1_macro = f1_score(targets[split_test], predicted, average='macro')
     accuracy = accuracy_score(targets[split_test], predicted)
 
-    return f1_micro, f1_macro, accuracy
+    return accuracy
 
 
 def get_data(dataset_str):
