@@ -11,39 +11,39 @@ from utils import (get_data, get_data_splits,
                    score_node_classification,
                    score_link_prediction, link_prediction_scores,
                    score_node_classification_sets)
-from models import (MLPEncoder, GCNEncoder, SGCEncoder, GAE, DGI, Node2Vec,
-                    G2G, BilinearScore, SGE, DeepSetClassifier, MLPGaussianEncoder, GCNGaussianEncoder)
-from samplers import make_sample_iterator, FirstNeighborSampling, GraphCorruptionSampling, RankedSampling
+import models
+from samplers import (make_sample_iterator, FirstNeighborSampling,
+                      GraphCorruptionSampling, RankedSampling)
 
 
-def train_encoder(dataset_str, method, encoder_str, dimensions, n_points, lr, epochs,
-                  device_str, link_prediction=False, seed=0,
+def train_encoder(dataset_str, method, encoder_str, dimensions, n_points, lr,
+                  epochs, device_str, link_prediction=False, seed=0,
                   ckpt_name=None, edge_score='inner'):
     if encoder_str == 'mlp':
-        encoder_class = MLPEncoder
+        encoder_class = models.MLPEncoder
     elif encoder_str == 'gcn':
-        encoder_class = GCNEncoder
+        encoder_class = models.GCNEncoder
     elif encoder_str == 'sgc':
-        encoder_class = SGCEncoder
+        encoder_class = models.SGCEncoder
     elif encoder_str == 'mlpgauss':
-        encoder_class = MLPGaussianEncoder
+        encoder_class = models.MLPGaussianEncoder
     elif encoder_str == 'gcngauss':
-        encoder_class = GCNGaussianEncoder
+        encoder_class = models.GCNMLPGaussianEncoder
     else:
         raise ValueError(f'Unknown encoder {encoder_str}')
 
     energy = 'kldiv'
     if method == 'dgi':
-        model_class = DGI
+        model_class = models.DGI
     elif method == 'gae':
-        model_class = GAE
+        model_class = models.GAE
     elif method == 'sge':
-        model_class = SGE
+        model_class = models.SGE
     elif method == 'graph2gauss':
-        model_class = G2G
+        model_class = models.G2G
     elif method == 'graph2vec':
         energy = 'sqeuclidean'
-        model_class = G2G
+        model_class = models.G2G
     elif method in ['node2vec', 'raw']:
         model_class = None
     else:
@@ -52,7 +52,7 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, n_points, lr, ep
     if edge_score == 'inner':
         edge_score_class = None
     elif edge_score == 'bilinear':
-        edge_score_class = BilinearScore
+        edge_score_class = models.BilinearScore
     else:
         raise ValueError(f'Unknown edge score {edge_score}')
 
@@ -90,11 +90,10 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, n_points, lr, ep
 
     train_iter = make_sample_iterator(train_sampler, num_workers=1)
 
+    x = data.x.to(device)
+    edge_index = train_pos.to(device)
     # Train model
     if method in ['gae', 'dgi', 'sge', 'graph2gauss', 'graph2vec']:
-        x = data.x.to(device)
-        edge_index = train_pos.to(device)
-
         num_features = data.x.shape[1]
         encoder = encoder_class(num_features, dimensions)
         emb_dim = dimensions[-1]
@@ -151,12 +150,12 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, n_points, lr, ep
     elif method == 'node2vec':
         path = osp.join(osp.dirname(osp.realpath(__file__)), 'node2vec',
                         'data')
-        model = Node2Vec(train_pos, path, data.num_nodes)
+        model = models.Node2Vec(train_pos, path, data.num_nodes)
     else:
         model = None
 
     if method == 'raw':
-        embeddings = x
+        embeddings = x.cpu()
     else:
         model.eval()
         embeddings = model.encoder(x, edge_index).detach().cpu()
@@ -203,6 +202,7 @@ else:
     print('Running without Sacred observers')
 
 
+# noinspection PyUnusedLocal
 @ex.config
 def config():
     """
@@ -211,7 +211,8 @@ def config():
                                'amazonphoto'}
     method (str): one of {'gae', 'dgi', 'graph2gauss', 'node2vec'}
     encoder_str (str): one of {'mlp', 'gcn', 'sgc'}
-    hiddem_dims (list): List with number of units in each layer of the encoder
+    hidden_dims (list): List with number of units in each layer of the encoder
+    n_points (int): Number of support points, only used in Sinkhorn embeddings
     lr (float): learning rate
     epochs (int): number of epochs for training
     p_labeled (float): percentage of labeled nodes used for node classification
@@ -285,19 +286,22 @@ def node_class_experiments(dataset_str, method, encoder_str, hidden_dims,
     for i in range(n_exper):
         print('\nTrial {:d}/{:d}'.format(i + 1, n_exper))
         embeddings, _ = train_encoder(dataset_str, method, encoder_str,
-                                   hidden_dims, n_points, lr, epochs,
-                                   device, seed=i, ckpt_name=timestamp)
+                                      hidden_dims, n_points, lr, epochs,
+                                      device, seed=i, ckpt_name=timestamp)
         if method == 'sge':
-            embeddings = embeddings.reshape(-1, n_points, hidden_dims[-1]//n_points)
+            embeddings = embeddings.reshape(-1, n_points,
+                                            hidden_dims[-1]//n_points)
 
         data = get_data(dataset_str)
         labels = data.y.cpu().numpy()
         if method == 'sge':
             embeddings = embeddings.numpy()
-            scores = score_node_classification_sets(embeddings, labels, DeepSetClassifier,
+            scores = score_node_classification_sets(embeddings, labels,
+                                                    models.DeepSetClassifier,
                                                     device, p_labeled, seed=i)
         else:
-            scores = score_node_classification(embeddings, labels, p_labeled, seed=i)
+            scores = score_node_classification(embeddings, labels, p_labeled,
+                                               seed=i)
 
         test_acc = scores[2]
         print('test_acc: {:.6f}'.format(test_acc))
