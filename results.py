@@ -143,9 +143,16 @@ def dataset_boxplots():
 
 
 def train_save_embeddings(method, dataset_str):
-    embeddings, _ = train_encoder(dataset_str, method, encoder_str='gcn',
-                                  dimensions=[256, 128], n_points=32, lr=1e-3, epochs=200,
+    n_points = 4
+    emb_dim = 2
+    hidden_dims = [256, emb_dim * n_points]
+    embeddings, _ = train_encoder(dataset_str, method, encoder_str='mlp',
+                                  dimensions=hidden_dims, n_points=n_points,
+                                  lr=1e-3, epochs=2000, link_prediction=False,
                                   device_str='cuda', seed=0)
+    if method == 'sge':
+        embeddings = embeddings.reshape(-1, n_points,
+                                        hidden_dims[-1] // n_points)
     embeddings = embeddings.numpy()
     np.save('emb_' + method, embeddings)
 
@@ -168,6 +175,27 @@ def plot_embeddings(method, dataset_str):
     plt.cla()
 
 
+def plot_sge_embeddings(dataset_str):
+    embs = np.load('emb_sge.npy')
+    n_nodes, n_points, emb_dim = embs.shape
+    data = get_data(dataset_str)
+    labels = data.y.numpy()
+    n_labels = np.unique(labels).size
+    y = np.expand_dims(data.y.numpy(), axis=1)
+
+    embs = embs.reshape(n_nodes * n_points, emb_dim)
+    labels = np.tile(np.ones_like(y) * y, [1, n_points])
+    labels = labels.reshape(n_nodes * n_points)
+
+    fig, ax = plt.subplots()
+    ax.scatter(embs[:, 0], embs[:, 1], c=labels,
+               cmap=plt.cm.get_cmap('jet', n_labels))
+
+    ax.set_axis_on()
+    fig.savefig('fig_sge')
+    plt.cla()
+
+
 def plot_adjacency(method, dataset_str):
     def sigmoid(x):
         return 1/(1+np.exp(-x))
@@ -184,14 +212,45 @@ def plot_adjacency(method, dataset_str):
     ax.imshow(pred_adj, cmap='binary')
     fig.savefig('adj_pred')
 
-if __name__ == '__main__':
-    #for method in ['gae', 'dgi', 'graph2gauss']:
-    #    train_save_embeddings(method, 'cora')
-    #    plot_embeddings(method, 'cora')
-    method = 'gae'
-    dataset_str = 'cora'
-    train_save_embeddings(method, 'cora')
-    plot_adjacency(method, dataset_str)
+
+def sge_curve(dataset_str):
+    max_total_dims = 30
+    fig, ax = plt.subplots()
+
+    for emb_dim in [0, 2, 3, 4]:
+        if emb_dim == 0:
+            max_points = max_total_dims
+        else:
+            max_points = max_total_dims // emb_dim
+
+        n_points = np.arange(1, max_points + 1)
+
+        ap = np.empty(max_points)
+        total_dims = np.empty(max_points)
+
+        for i, n in enumerate(n_points):
+            print('emb_dim: {:d} points: {:d}'.format(emb_dim, n))
+            if emb_dim == 0:
+                total_d = n
+                points = 1
+            else:
+                total_d = n * emb_dim
+                points = n
+            total_dims[i] = total_d
+            hidden_dims = [256, total_d]
+            _, results = train_encoder(dataset_str, method='sge', encoder_str='mlp',
+                                       dimensions=hidden_dims,
+                                       n_points=points,
+                                       lr=1e-2, epochs=200,
+                                       link_prediction=True,
+                                       device_str='cuda', seed=0)
+            ap[i] = results[1]
+
+        ax.plot(total_dims, ap, label='R{:d}'.format(emb_dim))
+
+    plt.legend()
+    fig.savefig('sge_{:d}_1e-2_{}'.format(emb_dim, dataset_str))
 
 
+sge_curve('cora')
 
