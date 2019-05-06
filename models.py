@@ -270,6 +270,9 @@ class Node2Vec(nn.Module):
         all_embs = torch.tensor(embeddings, dtype=torch.float32)
         self.encoder = LookupEncoder(all_embs)
 
+    def score_pairs(self, embs, nodes_x, nodes_y):
+        return (embs[nodes_x] * embs[nodes_y]).sum(dim=1)
+
 
 class MLPGaussianEncoder(nn.Module):
     def __init__(self, in_features, hidden_dims, *args):

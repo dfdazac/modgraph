@@ -13,7 +13,8 @@ from utils import (get_data, get_data_splits,
                    score_node_classification_sets)
 import models
 from samplers import (make_sample_iterator, FirstNeighborSampling,
-                      GraphCorruptionSampling, RankedSampling)
+                      GraphCorruptionSampling, RankedSampling,
+                      RandomWalkSampling)
 
 
 def train_encoder(dataset_str, method, encoder_str, dimensions, n_points, lr,
@@ -85,15 +86,17 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, n_points, lr,
         train_sampler = GraphCorruptionSampling(epochs, train_pos, data.num_nodes)
     elif method in ['graph2gauss', 'graph2vec', 'sge']:
         train_sampler = RankedSampling(epochs, train_pos)
+    elif method == 'node2vec':
+        pass
     else:
         raise ValueError(f'Sampling strategy undefined for method {method}')
-
-    train_iter = make_sample_iterator(train_sampler, num_workers=1)
 
     x = data.x.to(device)
     edge_index = train_pos.to(device)
     # Train model
     if method in ['gae', 'dgi', 'sge', 'graph2gauss', 'graph2vec']:
+        train_iter = make_sample_iterator(train_sampler, num_workers=1)
+
         num_features = data.x.shape[1]
         encoder = encoder_class(num_features, dimensions)
         emb_dim = dimensions[-1]
@@ -295,10 +298,10 @@ def node_class_experiments(dataset_str, method, encoder_str, hidden_dims,
             embeddings = embeddings.reshape(-1, n_points,
                                             hidden_dims[-1]//n_points)
 
+        embeddings = embeddings.numpy()
         data = get_data(dataset_str)
         labels = data.y.cpu().numpy()
         if method == 'sge':
-            embeddings = embeddings.numpy()
             test_acc = score_node_classification_sets(embeddings, labels,
                                                       models.DeepSetClassifier,
                                                       device, p_labeled,
