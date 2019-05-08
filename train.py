@@ -14,7 +14,7 @@ from utils import (get_data, get_data_splits,
 import models
 from samplers import (make_sample_iterator, FirstNeighborSampling,
                       GraphCorruptionSampling, RankedSampling,
-                      RandomWalkSampling)
+                      ShortestPathSampling)
 
 
 def train_encoder(dataset_str, method, encoder_str, dimensions, n_points, lr,
@@ -39,7 +39,7 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, n_points, lr,
     elif method == 'gae':
         model_class = models.GAE
     elif method == 'sge':
-        model_class = models.SGE
+        model_class = models.SGEMetric
     elif method == 'graph2gauss':
         model_class = models.G2G
     elif method == 'graph2vec':
@@ -84,8 +84,10 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, n_points, lr,
         train_sampler = FirstNeighborSampling(epochs, train_pos, train_neg, resample_neg_edges)
     elif method == 'dgi':
         train_sampler = GraphCorruptionSampling(epochs, train_pos, data.num_nodes)
-    elif method in ['graph2gauss', 'graph2vec', 'sge']:
+    elif method in ['graph2gauss', 'graph2vec']:
         train_sampler = RankedSampling(epochs, train_pos)
+    elif method == 'sge':
+        train_sampler = ShortestPathSampling(epochs, train_pos)
     elif method == 'node2vec':
         pass
     else:
@@ -95,7 +97,7 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, n_points, lr,
     edge_index = train_pos.to(device)
     # Train model
     if method in ['gae', 'dgi', 'sge', 'graph2gauss', 'graph2vec']:
-        train_iter = make_sample_iterator(train_sampler, num_workers=1)
+        train_iter = make_sample_iterator(train_sampler, num_workers=2)
 
         num_features = data.x.shape[1]
         encoder = encoder_class(num_features, dimensions)
@@ -231,10 +233,10 @@ def config():
     dataset_str = 'cora'
     method = 'sge'
     encoder_str = 'mlp'
-    hidden_dims = [256, 128]
-    n_points = 8
+    hidden_dims = [256, 40]
+    n_points = 10
     lr = 0.01
-    epochs = 200
+    epochs = 5000
     p_labeled = 0.1
     n_exper = 20
     device = 'cuda'

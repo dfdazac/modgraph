@@ -252,5 +252,6 @@ def sge_curve(dataset_str):
     fig.savefig('sge_{:d}_1e-2_{}'.format(emb_dim, dataset_str))
 
 
-sge_curve('cora')
+train_save_embeddings('sge', 'cora')
+plot_sge_embeddings('cora')
 

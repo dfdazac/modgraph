@@ -34,7 +34,8 @@ config = {'dataset_str': None,
           'edge_score': 'inner'}
 
 # Values to be changed in experiments
-param_grid = {'dataset_str': ['citeseer', 'pubmed'],
+param_grid = {'dataset_str': ['coauthorcs', 'coauthorphys',
+                              'amazoncomp', 'amazonphoto'],
               'n_points': [1, 4, 8],
               'lr': [1e-2, 1e-3, 1e-4]}
 

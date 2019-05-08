@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader
+import networkx as nx
 
 from utils import adj_from_edge_index, get_hops, sample_triplets
 
@@ -62,6 +63,33 @@ class GraphCorruptionSampling(NodeSampling):
     def __getitem__(self, item):
         perm = torch.randperm(self.num_nodes)
         return self.edge_index, perm[self.edge_index]
+
+
+class ShortestPathSampling(NodeSampling):
+    def __init__(self, iters, edge_index, cutoff=10):
+        super(ShortestPathSampling, self).__init__(iters, edge_index)
+        adj = adj_from_edge_index(edge_index)
+        graph = nx.from_scipy_sparse_matrix(adj)
+        self.paths = dict(nx.all_pairs_shortest_path_length(graph, cutoff))
+        for source_idx in self.paths:
+            self.paths[source_idx].pop(source_idx)
+
+    def __getitem__(self, item):
+        samples = []
+        distances = []
+        for source_idx in self.paths:
+            path_nodes = list(self.paths[source_idx].keys())
+
+            if len(path_nodes) == 0:
+                continue
+
+            target_idx = np.random.choice(path_nodes)
+            distance = self.paths[source_idx][target_idx]
+            samples.append([int(source_idx), int(target_idx)])
+            distances.append(float(distance))
+
+        return (torch.tensor(samples, dtype=torch.long).t(),
+                torch.tensor(distances, dtype=torch.float))
 
 
 def simple_collate_fn(batch):

@@ -228,6 +228,26 @@ class SGE(nn.Module):
         return loss
 
 
+class SGEMetric(nn.Module):
+    def __init__(self, encoder, emb_dim=None, n_points=None, **kwargs):
+        super(SGEMetric, self).__init__()
+        self.encoder = encoder
+        self.sinkhorn = SamplesLoss(loss='sinkhorn', p=1, blur=0.05)
+        self.space_dim = emb_dim//n_points
+        self.n_points = n_points
+
+    def score_pairs(self, embs, nodes_x, nodes_y):
+        return -self.sinkhorn(embs[nodes_x].reshape(-1, self.n_points, self.space_dim),
+                              embs[nodes_y].reshape(-1, self.n_points, self.space_dim))
+
+    def forward(self, x, edge_index, pairs, graph_dist):
+        z = self.encoder(x, edge_index)
+        distance = -self.score_pairs(z, pairs[0], pairs[1])
+        distortion = torch.abs(distance - graph_dist)/graph_dist
+        loss = torch.mean(distortion)
+        return loss
+
+
 class LookupEncoder(nn.Module):
     """Dummy encoder class to store embeddings from some algorithms,
     e.g. node2vec, as a lookup table.
