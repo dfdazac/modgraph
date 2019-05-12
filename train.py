@@ -1,4 +1,3 @@
-import os.path as osp
 import os
 from datetime import datetime
 
@@ -156,9 +155,7 @@ def train_encoder(dataset_str, method, encoder_str, dimensions, n_points, lr,
         model.load_state_dict(torch.load(ckpt_name))
         os.remove(ckpt_name)
     elif method == 'node2vec':
-        path = osp.join(osp.dirname(osp.realpath(__file__)), 'node2vec',
-                        'data')
-        model = models.Node2Vec(train_pos, path, data.num_nodes)
+        model = models.Node2Vec(train_pos, data.num_nodes, dimensions[-1])
     else:
         model = None
 
@@ -231,12 +228,12 @@ def config():
         {'inner', 'bilinear'}
     """
     dataset_str = 'cora'
-    method = 'sge'
-    encoder_str = 'mlp'
-    hidden_dims = [256, 40]
+    method = 'gae'
+    encoder_str = 'gcn'
+    hidden_dims = [256, 128]
     n_points = 10
-    lr = 0.01
-    epochs = 5000
+    lr = 0.001
+    epochs = 200
     p_labeled = 0.1
     n_exper = 20
     device = 'cuda'

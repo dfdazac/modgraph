@@ -1,13 +1,15 @@
-import subprocess
-import os
-
+import numpy as np
+import networkx as nx
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch_geometric.nn import GCNConv, MessagePassing
 from torch_geometric.nn.inits import glorot
-import numpy as np
 from geomloss import SamplesLoss
+
+from node2vec import node2vec
+from gensim.models import Word2Vec
+from utils import adj_from_edge_index
 
 
 # Adapted from PyTorch Geometric
@@ -263,30 +265,28 @@ class LookupEncoder(nn.Module):
         return self.embeddings
 
 
+# noinspection PyAbstractClass
 class Node2Vec(nn.Module):
-    node2vec_path = 'node2vec/main.py'
-
-    def __init__(self, edge_index, path, num_nodes, dim=128):
+    def __init__(self, edge_index, num_nodes, dim=128):
         super(Node2Vec, self).__init__()
-        # Write edge list
-        edges_path = path + '.edges'
-        embs_path = path + '.emb'
-        np.savetxt(edges_path, edge_index.cpu().numpy().T, fmt='%d %d')
+        adj = adj_from_edge_index(edge_index)
+        nx_graph = nx.from_scipy_sparse_matrix(adj)
+        for edge in nx_graph.edges():
+            nx_graph[edge[0]][edge[1]]['weight'] = 1
+        nx_graph = nx_graph.to_undirected()
 
-        subprocess.run(['python',
-                        self.node2vec_path,
-                        '--input', edges_path,
-                        '--output', embs_path,
-                        '--dimensions', str(dim),
-                        '--workers', '16'])
+        graph = node2vec.Graph(nx_graph, is_directed=False, p=1, q=1)
+        graph.preprocess_transition_probs()
+        walks = graph.simulate_walks(num_walks=10, walk_length=80)
+        walks = [list(map(str, walk)) for walk in walks]
 
-        # Read embeddings and store in encoder
-        emb_data = np.loadtxt(embs_path, skiprows=1)
-        os.remove(edges_path)
-        os.remove(embs_path)
-        embeddings = np.zeros([num_nodes, emb_data.shape[1] - 1])
-        idx = emb_data[:, 0].astype(np.int)
-        embeddings[idx] = emb_data[:, 1:]
+        model = Word2Vec(walks, size=dim, window=10, min_count=0, sg=1,
+                         workers=8, iter=1)
+
+        embeddings = np.zeros([num_nodes, dim])
+        for entity in model.wv.index2entity:
+            embeddings[int(entity)] = model.wv.get_vector(entity)
+
         all_embs = torch.tensor(embeddings, dtype=torch.float32)
         self.encoder = LookupEncoder(all_embs)
 
