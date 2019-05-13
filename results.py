@@ -8,7 +8,7 @@ import numpy as np
 from sklearn.manifold import TSNE
 import networkx as nx
 
-from train import train_encoder
+from train import train
 from utils import get_data, adj_from_edge_index
 
 rcParams['font.family'] = 'sans-serif'
@@ -146,10 +146,10 @@ def train_save_embeddings(method, dataset_str):
     n_points = 4
     emb_dim = 2
     hidden_dims = [256, emb_dim * n_points]
-    embeddings, _ = train_encoder(dataset_str, method, encoder_str='mlp',
-                                  dimensions=hidden_dims, n_points=n_points,
-                                  lr=1e-3, epochs=2000, link_prediction=False,
-                                  device_str='cuda', seed=0)
+    embeddings, _ = train(dataset_str, method, encoder_str='mlp',
+                          dimensions=hidden_dims, n_points=n_points,
+                          lr=1e-3, epochs=2000, link_prediction=False,
+                          device_str='cuda', seed=0)
     if method == 'sge':
         embeddings = embeddings.reshape(-1, n_points,
                                         hidden_dims[-1] // n_points)
@@ -238,17 +238,20 @@ def sge_curve(dataset_str):
                 points = n
             total_dims[i] = total_d
             hidden_dims = [256, total_d]
-            _, results = train_encoder(dataset_str, method='sge', encoder_str='mlp',
-                                       dimensions=hidden_dims,
-                                       n_points=points,
-                                       lr=1e-2, epochs=200,
-                                       link_prediction=True,
-                                       device_str='cuda', seed=0)
+            _, results = train(dataset_str, method='sge', encoder_str='mlp',
+                               dimensions=hidden_dims,
+                               n_points=points,
+                               lr=1e-2, epochs=200,
+                               link_prediction=True,
+                               device_str='cuda', seed=0)
             ap[i] = results[1]
 
-        ax.plot(total_dims, ap, label='R{:d}'.format(emb_dim))
+        label = '_d' if emb_dim == 0 else str(emb_dim)
+        ax.plot(total_dims, ap, label='R{:d}'.format(label))
 
     plt.legend()
+    plt.xlabel('d')
+    plt.ylabel('AP')
     fig.savefig('sge_{:d}_1e-2_{}'.format(emb_dim, dataset_str))
 
 

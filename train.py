@@ -16,9 +16,9 @@ from samplers import (make_sample_iterator, FirstNeighborSampling,
                       ShortestPathSampling)
 
 
-def train_encoder(dataset_str, method, encoder_str, dimensions, n_points, lr,
-                  epochs, device_str, link_prediction=False, seed=0,
-                  ckpt_name=None, edge_score='inner'):
+def train(dataset_str, method, encoder_str, dimensions, n_points, lr,
+          epochs, device_str, link_prediction=False, seed=0,
+          ckpt_name=None, edge_score='inner'):
     if encoder_str == 'mlp':
         encoder_class = models.MLPEncoder
     elif encoder_str == 'gcn':
@@ -271,10 +271,10 @@ def link_pred_experiments(dataset_str, method, encoder_str, hidden_dims,
     print('Experiment timestamp: ' + timestamp)
     for i in range(n_exper):
         print('\nTrial {:d}/{:d}'.format(i + 1, n_exper))
-        _, scores = train_encoder(dataset_str, method, encoder_str,
-                                  hidden_dims, n_points, lr, epochs,
-                                  device, seed=i, link_prediction=True,
-                                  ckpt_name=timestamp, edge_score=edge_score)
+        _, scores = train(dataset_str, method, encoder_str,
+                          hidden_dims, n_points, lr, epochs,
+                          device, seed=i, link_prediction=True,
+                          ckpt_name=timestamp, edge_score=edge_score)
         results[i] = scores
 
     log_statistics(results, ['AUC', 'AP'])
@@ -290,9 +290,9 @@ def node_class_experiments(dataset_str, method, encoder_str, hidden_dims,
     print('Experiment timestamp: ' + timestamp)
     for i in range(n_exper):
         print('\nTrial {:d}/{:d}'.format(i + 1, n_exper))
-        embeddings, _ = train_encoder(dataset_str, method, encoder_str,
-                                      hidden_dims, n_points, lr, epochs,
-                                      device, seed=i, ckpt_name=timestamp)
+        embeddings, _ = train(dataset_str, method, encoder_str,
+                              hidden_dims, n_points, lr, epochs,
+                              device, seed=i, ckpt_name=timestamp)
         if method == 'sge':
             embeddings = embeddings.reshape(-1, n_points,
                                             hidden_dims[-1]//n_points)
