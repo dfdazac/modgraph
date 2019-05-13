@@ -197,7 +197,8 @@ class SGE(nn.Module):
     def __init__(self, encoder, emb_dim=None, n_points=None, **kwargs):
         super(SGE, self).__init__()
         self.encoder = encoder
-        self.sinkhorn = SamplesLoss(loss='sinkhorn', p=1, blur=0.05)
+        self.sinkhorn = SamplesLoss(loss='sinkhorn', p=1, blur=0.05,
+                                    diameter=10)
         self.space_dim = emb_dim//n_points
         self.n_points = n_points
 
