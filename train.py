@@ -38,6 +38,8 @@ def train(dataset_str, method, encoder_str, dimensions, n_points, lr,
     elif method == 'gae':
         model_class = models.GAE
     elif method == 'sge':
+        model_class = models.SGE
+    elif method == 'sgemetric':
         model_class = models.SGEMetric
     elif method == 'graph2gauss':
         model_class = models.G2G
@@ -86,6 +88,8 @@ def train(dataset_str, method, encoder_str, dimensions, n_points, lr,
     elif method in ['graph2gauss', 'graph2vec']:
         train_sampler = RankedSampling(epochs, train_pos)
     elif method == 'sge':
+        train_sampler = RankedSampling(epochs, train_pos)
+    elif method == 'sgemetric':
         train_sampler = ShortestPathSampling(epochs, train_pos)
     elif method == 'node2vec':
         pass
@@ -95,7 +99,7 @@ def train(dataset_str, method, encoder_str, dimensions, n_points, lr,
     x = data.x.to(device)
     edge_index = train_pos.to(device)
     # Train model
-    if method in ['gae', 'dgi', 'sge', 'graph2gauss', 'graph2vec']:
+    if method in ['gae', 'dgi', 'sge', 'sgemetric', 'graph2gauss', 'graph2vec']:
         train_iter = make_sample_iterator(train_sampler, num_workers=2)
 
         num_features = data.x.shape[1]
@@ -117,7 +121,6 @@ def train(dataset_str, method, encoder_str, dimensions, n_points, lr,
             pos_samples, neg_samples = next(train_iter)
             pos_samples = pos_samples.to(device)
             neg_samples = neg_samples.to(device)
-
             loss = model(x, edge_index, pos_samples, neg_samples)
             loss.backward()
             optimizer.step()
@@ -164,6 +167,12 @@ def train(dataset_str, method, encoder_str, dimensions, n_points, lr,
     else:
         model.eval()
         embeddings = model.encoder(x, edge_index).detach().cpu()
+
+        if method in ['sge', 'sgemetric']:
+            points = embeddings.reshape(data.num_nodes, n_points, -1)
+            mean = points.mean(dim=1, keepdim=True)
+            stdev = torch.sqrt(torch.sum((points - mean)**2, dim=-1)).mean()
+            print('Average distance from mean: {:.6f}'.format(stdev.item()))
 
     if link_prediction:
         if edge_score_class is None:
@@ -228,10 +237,10 @@ def config():
         {'inner', 'bilinear'}
     """
     dataset_str = 'cora'
-    method = 'gae'
-    encoder_str = 'gcn'
+    method = 'sge'
+    encoder_str = 'mlp'
     hidden_dims = [256, 128]
-    n_points = 10
+    n_points = 1
     lr = 0.001
     epochs = 200
     p_labeled = 0.1
@@ -270,6 +279,8 @@ def link_pred_experiments(dataset_str, method, encoder_str, hidden_dims,
     results = np.empty([n_exper, 2])
     print('Experiment timestamp: ' + timestamp)
     for i in range(n_exper):
+        if i == 16:
+            print('wait')
         print('\nTrial {:d}/{:d}'.format(i + 1, n_exper))
         _, scores = train(dataset_str, method, encoder_str,
                           hidden_dims, n_points, lr, epochs,
