@@ -1,8 +1,7 @@
 import numpy as np
 from functools import partial
 import random
-from multiprocessing import Pool, Manager, Process
-from itertools import chain
+from multiprocessing import Pool
 
 
 class Graph():
