@@ -293,7 +293,8 @@ def score_link_prediction(score_class, emb, test_pos, test_neg,
 
 def score_node_classification(features, targets, p_labeled=0.1, seed=0):
     """
-    Train a classifier using the node embeddings as features and reports the performance.
+    Train a classifier using the node embeddings as features and reports the
+    performance.
 
     Parameters
     ----------
@@ -303,9 +304,7 @@ def score_node_classification(features, targets, p_labeled=0.1, seed=0):
         The ground truth labels
     p_labeled : float
         Percentage of nodes to use for training the classifier
-    n_repeat : int
-        Number of times to repeat the experiment
-    norm
+    seed:
 
     Returns
     -------
@@ -329,9 +328,11 @@ def score_node_classification(features, targets, p_labeled=0.1, seed=0):
     return accuracy
 
 
-def score_node_classification_sets(features, targets, model_class, device_str, p_labeled=0.1, seed=0):
+def score_node_classification_sets(features, targets, model_class, device_str,
+                                   p_labeled=0.1, seed=0):
     """
-    Train a classifier using the node embeddings as features and reports the performance.
+    Train a classifier using the node embeddings as features and reports the
+    performance.
 
     Parameters
     ----------
@@ -339,11 +340,11 @@ def score_node_classification_sets(features, targets, model_class, device_str, p
         The features used to train the classifier, i.e. the node embeddings
     targets : array-like, shape [N]
         The ground truth labels
+    model_class: class with the definition of the classifier
+    device_str: str
     p_labeled : float
         Percentage of nodes to use for training the classifier
-    n_repeat : int
-        Number of times to repeat the experiment
-    norm
+    seed: int
 
     Returns
     -------
@@ -471,14 +472,16 @@ def get_hops(A, K=1):
 
 def to_triplets(sampled_hops):
     """
-    Form all valid triplets (pairwise constraints) from a set of sampled nodes in triplets
+    Form all valid triplets (pairwise constraints) from a set of sampled nodes
+    in triplets
 
     Parameters
     ----------
     sampled_hops : array-like, shape [N, K]
        The sampled nodes.
     scale_terms : dict
-        The appropriate up-scaling terms to ensure unbiased estimates for each neighbourhood
+        The appropriate up-scaling terms to ensure unbiased estimates for each
+        neighbourhood
 
     Returns
     -------
