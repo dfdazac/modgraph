@@ -240,7 +240,7 @@ def config():
     """
     dataset_str = 'cora'
     method = 'dgi'
-    encoder_str = 'sgc'
+    encoder_str = 'gcn'
     hidden_dims = [256, 128]
     n_points = 1
     lr = 0.001
@@ -301,7 +301,7 @@ def node_class_experiments(dataset_str, method, encoder_str, hidden_dims,
                            timestamp, _run):
     torch.random.manual_seed(0)
     np.random.seed(0)
-    results = np.empty([n_exper, 1])
+    results = np.empty([n_exper, 2])
     print('Experiment timestamp: ' + timestamp)
     for i in range(n_exper):
         print('\nTrial {:d}/{:d}'.format(i + 1, n_exper))
@@ -321,10 +321,12 @@ def node_class_experiments(dataset_str, method, encoder_str, hidden_dims,
                                                       device, p_labeled,
                                                       seed=i)
         else:
-            test_acc = score_node_classification(embeddings, labels, p_labeled,
-                                                 seed=i)
+            train_acc, test_acc = score_node_classification(embeddings,
+                                                            labels, p_labeled,
+                                                            seed=i)
 
-        print('test_acc: {:.6f}'.format(test_acc))
-        results[i] = test_acc
+        print('train - acc: {:.6f}'.format(train_acc))
+        print('test  - acc: {:.6f}'.format(test_acc))
+        results[i] = [train_acc, test_acc]
 
-    log_statistics(results, ['ACC'])
+    log_statistics(results, ['train ACC', 'test ACC'])

@@ -319,13 +319,15 @@ def score_node_classification(features, targets, p_labeled=0.1, seed=0):
     sss = StratifiedShuffleSplit(n_splits=1, test_size=1 - p_labeled,
                                  random_state=seed)
     split_train, split_test = next(sss.split(features, targets))
-
     lrcv.fit(features[split_train], targets[split_train])
-    predicted = lrcv.predict(features[split_test])
 
-    accuracy = accuracy_score(targets[split_test], predicted)
+    train_preds = lrcv.predict(features[split_train])
+    train_acc = accuracy_score(targets[split_train], train_preds)
 
-    return accuracy
+    test_preds = lrcv.predict(features[split_test])
+    test_acc = accuracy_score(targets[split_test], test_preds)
+
+    return train_acc, test_acc
 
 
 def score_node_classification_sets(features, targets, model_class, device_str,
