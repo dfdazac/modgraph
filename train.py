@@ -174,13 +174,16 @@ def train(dataset_str, method, encoder_str, dimensions, n_points, lr,
             stdev = torch.sqrt(torch.sum((points - mean)**2, dim=-1)).mean()
             print('Average distance from mean: {:.6f}'.format(stdev.item()))
 
+    results = -np.ones([3, 2])
     if link_prediction:
         if edge_score_class is None:
-            # Use method score for link prediction
-            pos_scores = model.score_pairs(embeddings, test_pos[0], test_pos[1])
-            neg_scores = model.score_pairs(embeddings, test_neg[0], test_neg[1])
-            auc, ap = link_prediction_scores(pos_scores, neg_scores)
+            # Evaluate on training, validation and test splits
+            for i, (pos, neg) in enumerate(zip(pos_split, neg_split)):
+                pos_scores = model.score_pairs(embeddings, pos[0], pos[1])
+                neg_scores = model.score_pairs(embeddings, neg[0], neg[1])
+                results[i] = link_prediction_scores(pos_scores, neg_scores)
         else:
+            # FIXME: should return scores for all splits
             if method == 'graph2gauss':
                 embeddings = embeddings[0]
 
@@ -195,15 +198,14 @@ def train(dataset_str, method, encoder_str, dimensions, n_points, lr,
                                             train_val_pos, train_val_neg,
                                             seed)
 
-        print('test_auc: {:6f}, test_ap: {:6f}'.format(auc, ap))
-    else:
-        auc, ap = None, None
+        for (auc_res, ap_res), split in zip(results, ['train', 'val', 'test']):
+            print('{:5} - auc: {:.6f} ap: {:.6f}'.format(split, auc_res, ap_res))
 
     if method in ['graph2gauss', 'graph2vec']:
         # Use the mean for downstream tasks
         embeddings = embeddings[0]
 
-    return embeddings, np.array([auc, ap])
+    return embeddings, results
 
 
 ex = Experiment()
@@ -237,8 +239,8 @@ def config():
         {'inner', 'bilinear'}
     """
     dataset_str = 'cora'
-    method = 'sge'
-    encoder_str = 'mlp'
+    method = 'dgi'
+    encoder_str = 'sgc'
     hidden_dims = [256, 128]
     n_points = 1
     lr = 0.001
@@ -265,7 +267,7 @@ def log_statistics(results, metrics, timestamp, _run):
     print('Results')
 
     for i, m in enumerate(metrics):
-        print('{}: {:.1f} ± {:.2f}'.format(m, mean[i] * 100, std[i] * 100))
+        print('{:12}: {:.1f} ± {:.2f}'.format(m, mean[i] * 100, std[i] * 100))
         _run.log_scalar(f'{metrics[i]} mean', mean[i])
         _run.log_scalar(f'{metrics[i]} std', std[i])
 
@@ -276,7 +278,7 @@ def link_pred_experiments(dataset_str, method, encoder_str, hidden_dims,
                           timestamp, _run):
     torch.random.manual_seed(0)
     np.random.seed(0)
-    results = np.empty([n_exper, 2])
+    results = np.empty([n_exper, 6])
     print('Experiment timestamp: ' + timestamp)
     for i in range(n_exper):
         if i == 16:
@@ -286,9 +288,11 @@ def link_pred_experiments(dataset_str, method, encoder_str, hidden_dims,
                           hidden_dims, n_points, lr, epochs,
                           device, seed=i, link_prediction=True,
                           ckpt_name=timestamp, edge_score=edge_score)
-        results[i] = scores
+        results[i] = scores.reshape(-1)
 
-    log_statistics(results, ['AUC', 'AP'])
+    log_statistics(results, ['train AUC', 'train AP',
+                             'valid AUC', 'valid AP',
+                             'test AUC', 'test AP'])
 
 
 @ex.automain
