@@ -445,18 +445,6 @@ class NodeClassifier(nn.Module):
         return torch.log_softmax(x, dim=-1)
 
 
-class InnerProductScore(nn.Module):
-    def __init__(self, *args, **kwargs):
-        super(InnerProductScore, self).__init__()
-        # For compatibility with Skorch
-        self._ = nn.Parameter()
-
-    def forward(self, emb):
-        emb_a, emb_b = emb[:, 0], emb[:, 1]
-        score = torch.sum(emb_a * emb_b, dim=-1)
-        return score
-
-
 class BilinearScore(nn.Module):
     def __init__(self, emb_dim):
         super(BilinearScore, self).__init__()

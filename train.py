@@ -8,7 +8,7 @@ from sacred.observers import MongoObserver
 
 from utils import (get_data, get_data_splits,
                    score_node_classification,
-                   score_link_prediction, link_prediction_scores,
+                   train_link_prediction, link_prediction_scores,
                    score_node_classification_sets)
 import models
 from samplers import (make_sample_iterator, FirstNeighborSampling,
@@ -183,8 +183,8 @@ def train(dataset_str, method, encoder_str, dimensions, n_points, lr,
                 neg_scores = model.score_pairs(embeddings, neg[0], neg[1])
                 results[i] = link_prediction_scores(pos_scores, neg_scores)
         else:
-            # FIXME: should return scores for all splits
-            if method == 'graph2gauss':
+            if method in ['graph2gauss', 'graph2vec']:
+                # Use the mean for downstream evaluation
                 embeddings = embeddings[0]
 
             # Train a custom link predictor
@@ -193,10 +193,13 @@ def train(dataset_str, method, encoder_str, dimensions, n_points, lr,
             train_val_pos = torch.cat((train_pos, val_pos), dim=-1)
             train_val_neg = torch.cat((train_neg, val_neg), dim=-1)
 
-            auc, ap = score_link_prediction(edge_score_class, embeddings,
-                                            test_pos, test_neg, device_str,
-                                            train_val_pos, train_val_neg,
-                                            seed)
+            scores = train_link_prediction(edge_score_class, embeddings,
+                                           train_val_pos, train_val_neg,
+                                           test_pos, test_neg, device_str,
+                                           seed)
+
+            results[0] = scores[:2]
+            results[2] = scores[2:]
 
         for (auc_res, ap_res), split in zip(results, ['train', 'val', 'test']):
             print('{:5} - auc: {:.6f} ap: {:.6f}'.format(split, auc_res, ap_res))
@@ -249,7 +252,7 @@ def config():
     n_exper = 20
     device = 'cuda'
     timestamp = str(int(datetime.now().timestamp()))
-    edge_score = 'inner'
+    edge_score = 'bilinear'
 
 
 @ex.capture

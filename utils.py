@@ -231,8 +231,8 @@ def build_data(emb, edges_pos, edges_neg):
     return pairs.numpy(), labels.numpy()
 
 
-def score_link_prediction(score_class, emb, test_pos, test_neg,
-                          device_str, train_pos=None, train_neg=None, seed=0):
+def train_link_prediction(score_class, emb, train_pos, train_neg,
+                          test_pos, test_neg, device_str, seed=0):
     """Evaluate the AUC and AP scores when using the provided embeddings to
     predict links between nodes.
 
@@ -250,45 +250,45 @@ def score_link_prediction(score_class, emb, test_pos, test_neg,
     torch.random.manual_seed(seed)
     np.random.seed(seed)
     emb_dim = emb.shape[1]
-    if train_pos is None or train_neg is None:
-        model = NeuralNet(module=score_class, module__emb_dim=emb_dim,
-                          criterion=torch.nn.BCEWithLogitsLoss,
-                          device=device_str, batch_size=-1)
-        model.initialize()
-    else:
-        print('Training link prediction model')
-        early_stopping = EarlyStopping(monitor='valid_acc', threshold=1e-3,
-                                       lower_is_better=False)
-        net = NeuralNetBinaryClassifier(score_class, module__emb_dim=emb_dim,
-                                        criterion=torch.nn.BCEWithLogitsLoss,
-                                        device=device_str, max_epochs=50,
-                                        verbose=1, optimizer=torch.optim.Adam,
-                                        callbacks=[early_stopping],
-                                        iterator_train__shuffle=True)
-        params = {
-            'lr': [1e-3, 5e-3, 1e-2]
-        }
-        # Split data into train/val
-        X, targets = build_data(emb, train_pos, train_neg)
-        shuffling = ShuffleSplit(n_splits=1, test_size=0.3, random_state=seed)
-        shuffling.get_n_splits(X, targets)
-        train_index, val_index = next(shuffling.split(X, targets))
-        val_fold = np.zeros(targets.shape, dtype=np.int)
-        val_fold[train_index] = -1
-        split = PredefinedSplit(test_fold=val_fold)
-        gs = GridSearchCV(net, params, cv=split, scoring='accuracy')
-        gs.fit(X, targets)
 
-        print('Best parameters: ', gs.best_params_)
-        model = gs.best_estimator_
+    print('Training link prediction model')
+    early_stopping = EarlyStopping(monitor='valid_acc', threshold=1e-3,
+                                   lower_is_better=False)
+    net = NeuralNetBinaryClassifier(score_class, module__emb_dim=emb_dim,
+                                    criterion=torch.nn.BCEWithLogitsLoss,
+                                    device=device_str, max_epochs=50,
+                                    verbose=1, optimizer=torch.optim.Adam,
+                                    callbacks=[early_stopping],
+                                    iterator_train__shuffle=True)
+    params = {
+        'lr': [1e-3, 5e-3, 1e-2]
+    }
+    # Split data into train/val
+    x, targets = build_data(emb, train_pos, train_neg)
+    shuffling = ShuffleSplit(n_splits=1, test_size=0.3, random_state=seed)
+    shuffling.get_n_splits(x, targets)
+    train_index, val_index = next(shuffling.split(x, targets))
+    val_fold = np.zeros(targets.shape, dtype=np.int)
+    val_fold[train_index] = -1
+    split = PredefinedSplit(test_fold=val_fold)
+    gs = GridSearchCV(net, params, cv=split, scoring='accuracy')
+    gs.fit(x, targets)
 
-    X, targets = build_data(emb, test_pos, test_neg)
-    preds = model.infer(X).detach().cpu()
+    print('Best parameters: ', gs.best_params_)
+    model = gs.best_estimator_
 
-    auc_score = roc_auc_score(targets, preds)
-    ap_score = average_precision_score(targets, preds)
+    # Performance on train split
+    preds = model.infer(x).detach().cpu()
+    train_auc = roc_auc_score(targets, preds)
+    train_ap = average_precision_score(targets, preds)
 
-    return auc_score, ap_score
+    # Performance on test split
+    x, targets = build_data(emb, test_pos, test_neg)
+    preds = model.infer(x).detach().cpu()
+    test_auc = roc_auc_score(targets, preds)
+    test_ap = average_precision_score(targets, preds)
+
+    return train_auc, train_ap, test_auc, test_ap
 
 
 def score_node_classification(features, targets, p_labeled=0.1, seed=0):
