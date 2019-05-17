@@ -313,7 +313,7 @@ def score_node_classification(features, targets, p_labeled=0.1, seed=0):
     f1_micro : float
         F_1 Score (macro) averaged of n_repeat trials.
     """
-    lrcv = LogisticRegressionCV(cv=3, multi_class='multinomial', n_jobs=-1,
+    lrcv = LogisticRegressionCV(cv=3, multi_class='multinomial', n_jobs=3,
                                 max_iter=300, random_state=seed)
 
     sss = StratifiedShuffleSplit(n_splits=1, test_size=1 - p_labeled,

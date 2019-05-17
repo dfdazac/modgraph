@@ -138,14 +138,14 @@ def train(dataset_str, method, encoder_str, dimensions, n_points, lr,
                     best_auc = auc
                     torch.save(model.state_dict(), ckpt_name)
 
-                if epoch % 20 == 0:
+                if epoch % 50 == 0:
                     time = datetime.now().strftime("%Y-%m-%d %H:%M")
                     log = ('[{}] [{:03d}/{:03d}] train loss: {:.6f}, '
                            'val_auc: {:6f}, val_ap: {:6f}')
                     print(log.format(time, epoch, epochs, loss.item(),
                                      auc, ap))
 
-            elif epoch % 20 == 0:
+            elif epoch % 50 == 0:
                 time = datetime.now().strftime("%Y-%m-%d %H:%M")
                 log = '[{}] [{:03d}/{:03d}] train loss: {:.6f}'
                 print(log.format(time, epoch, epochs, loss.item()))
@@ -242,7 +242,7 @@ def config():
         {'inner', 'bilinear'}
     """
     dataset_str = 'cora'
-    method = 'dgi'
+    method = 'gae'
     encoder_str = 'gcn'
     hidden_dims = [256, 128]
     n_points = 1
@@ -252,7 +252,7 @@ def config():
     n_exper = 20
     device = 'cuda'
     timestamp = str(int(datetime.now().timestamp()))
-    edge_score = 'bilinear'
+    edge_score = 'inner'
 
 
 @ex.capture
