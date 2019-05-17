@@ -409,15 +409,14 @@ def get_data(dataset_str):
     return dataset[0]
 
 
-def get_data_splits(dataset_str, neg_sample_mult, link_prediction,
+def get_data_splits(dataset, neg_sample_mult, link_prediction,
                     add_self_connections=False, seed=0):
-    data = get_data(dataset_str)
-    neg_edge_index = sample_zero_entries(data.edge_index, seed,
+    neg_edge_index = sample_zero_entries(dataset.edge_index, seed,
                                          neg_sample_mult)
 
     if link_prediction:
         # For link prediction we split edges in train/val/test sets
-        train_pos, val_pos, test_pos = split_edges(data.edge_index, seed,
+        train_pos, val_pos, test_pos = split_edges(dataset.edge_index, seed,
                                                    add_self_connections)
 
         num_val, num_test = val_pos.shape[1], test_pos.shape[1]
@@ -425,13 +424,13 @@ def get_data_splits(dataset_str, neg_sample_mult, link_prediction,
                                                        num_val=num_val,
                                                        num_test=num_test)
     else:
-        train_pos, val_pos, test_pos = data.edge_index, None, None
+        train_pos, val_pos, test_pos = dataset.edge_index, None, None
         train_neg_all, val_neg, test_neg = neg_edge_index, None, None
 
     pos_split = [train_pos, val_pos, test_pos]
     neg_split = [train_neg_all, val_neg, test_neg]
 
-    return data, pos_split, neg_split
+    return pos_split, neg_split
 
 
 def get_hops(A, K=1):
