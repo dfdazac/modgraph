@@ -34,8 +34,8 @@ config = {'dataset_str': None,
           'edge_score': 'inner'}
 
 # Values to be changed in experiments
-param_grid = {'method': ['dgi', 'gae'],
-              'encoder_str': ['mlp', 'gcn', 'sgc'],
+param_grid = {'method': ['graph2gauss', 'graph2vec'],
+              'encoder_str': ['mlpgauss', 'gcngauss'],
               'dataset_str': ['cora', 'citeseer', 'pubmed', 'corafull',
                               'coauthorcs', 'coauthorphys',
                               'amazoncomp', 'amazonphoto']}
