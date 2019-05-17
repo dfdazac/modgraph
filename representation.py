@@ -22,12 +22,12 @@ class EuclideanBilinear(nn.Module):
         self.weight = nn.Parameter(torch.Tensor(in_features, in_features))
         glorot(self.weight)
 
-    def score(self, z, summary):
+    def score(self, summary, z):
         result = torch.matmul(z, torch.matmul(self.weight, summary))
         return result
 
-    def forward(self, z, summary):
-        return self.score(z, summary)
+    def forward(self, summary, z):
+        return self.score(summary, z)
 
     @staticmethod
     def score_link_pred(z, pairs):

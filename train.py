@@ -240,12 +240,12 @@ def config():
     """
     dataset_str = 'cora'
 
-    encoder_str = 'sgc'
-    dimensions = [256, 128]
-    repr_str = 'euclidean'
+    encoder_str = 'gcn'
+    repr_str = 'euclidean_bilinear'
     loss_str = 'bce_loss'
-    sampling_str = 'first_neighbor'
+    sampling_str = 'graph_corruption'
 
+    dimensions = [256, 128]
     n_points = 1
     edge_score = 'inner'
     lr = 0.001

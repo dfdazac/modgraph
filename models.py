@@ -2,14 +2,13 @@ import numpy as np
 import networkx as nx
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from torch_geometric.nn import GCNConv, MessagePassing
 from torch_geometric.nn.inits import glorot
 from geomloss import SamplesLoss
-
 from node2vec import node2vec
 from gensim.models import Word2Vec
 from utils import adj_from_edge_index
+
+from representation import EuclideanBilinear
 
 
 class EmbeddingMethod(nn.Module):
@@ -21,15 +20,32 @@ class EmbeddingMethod(nn.Module):
         self.loss = loss
         self.sampling_class = sampling_class
 
-    def score_pair_link(self, x, edge_index, pairs):
+    def score_pairs(self, x, edge_index, pairs):
         z = self.encoder(x, edge_index)
         return self.representation.score_link_pred(z, pairs)
 
     def forward(self, x, edge_index, pos_samples, neg_samples):
-        z = self.encoder(x, edge_index)
+        if isinstance(self.representation, EuclideanBilinear):
+            pos_samples = self.encoder(x, pos_samples)
+            neg_samples = self.encoder(x, neg_samples)
+            summary = torch.sigmoid(pos_samples.mean(dim=0))
+            z = summary
+        else:
+            z = self.encoder(x, edge_index)
+
         pos_score = self.representation.score(z, pos_samples)
         neg_score = self.representation.score(z, neg_samples)
         return self.loss(pos_score, neg_score)
+
+    def __repr__(self):
+        repr_str = 'EmbeddingMethod(\n' + \
+                   'Encoder: ' + self.encoder.__repr__() + \
+                   '\nRepresentation: ' + self.representation.__class__.__name__ + \
+                   '\nLoss: ' + self.loss.__name__ + \
+                   '\nSampling: ' + self.sampling_class.__name__ + \
+                   '\n)'
+
+        return repr_str
 
 
 class Discriminator(nn.Module):
