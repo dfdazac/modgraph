@@ -19,6 +19,9 @@ from sampling import *
 def build_method(encoder_str, num_features, dimensions, repr_str, loss_str,
                  sampling_str):
     emb_dim = dimensions[-1]
+    if repr_str == 'gaussian':
+        emb_dim = dimensions[-1] * 2
+        dimensions[-1] = emb_dim
 
     if encoder_str == 'mlp':
         encoder_class = MLPEncoder
@@ -37,11 +40,15 @@ def build_method(encoder_str, num_features, dimensions, repr_str, loss_str,
         representation = Euclidean()
     elif repr_str == 'euclidean_bilinear':
         representation = EuclideanBilinear(in_features=emb_dim)
+    elif repr_str == 'gaussian':
+        representation = Gaussian()
     else:
         raise ValueError(f'Unknown representation {repr_str}')
 
     if loss_str == 'bce_loss':
         loss = bce_loss
+    elif loss_str == 'square_exponential':
+        loss = square_exponential
     else:
         raise ValueError(f'Unknown loss {loss_str}')
 
@@ -240,10 +247,10 @@ def config():
     """
     dataset_str = 'cora'
 
-    encoder_str = 'gcn'
-    repr_str = 'euclidean_bilinear'
-    loss_str = 'bce_loss'
-    sampling_str = 'graph_corruption'
+    encoder_str = 'mlp'
+    repr_str = 'gaussian'
+    loss_str = 'square_exponential'
+    sampling_str = 'ranked'
 
     dimensions = [256, 128]
     n_points = 1

@@ -2,7 +2,6 @@ import numpy as np
 import networkx as nx
 import torch
 import torch.nn as nn
-from torch_geometric.nn.inits import glorot
 from geomloss import SamplesLoss
 from node2vec import node2vec
 from gensim.models import Word2Vec
@@ -46,72 +45,6 @@ class EmbeddingMethod(nn.Module):
                    '\n)'
 
         return repr_str
-
-
-class Discriminator(nn.Module):
-    def __init__(self, hidden_dim):
-        super(Discriminator, self).__init__()
-        self.weight = nn.Parameter(torch.Tensor(hidden_dim, hidden_dim))
-        self.reset_parameters()
-
-    def reset_parameters(self):
-        size = self.weight.size(0)
-        glorot(self.weight)
-
-    def forward(self, x, summary):
-        x = torch.matmul(x, torch.matmul(self.weight, summary))
-        return x
-
-
-class DGI(nn.Module):
-    def __init__(self, encoder, emb_dim=None, **kwargs):
-        super(DGI, self).__init__()
-        self.encoder = encoder
-        self.discriminator = Discriminator(emb_dim)
-        self.loss = nn.BCEWithLogitsLoss()
-
-    def score_pairs(self, embs, nodes_x, nodes_y):
-        return (embs[nodes_x] * embs[nodes_y]).sum(dim=1)
-
-    def forward(self, x, edge_index, edges_pos, edges_neg):
-        positive = self.encoder(x, edges_pos)
-        negative = self.encoder(x, edges_neg)
-        summary = torch.sigmoid(positive.mean(dim=0))
-
-        positive = self.discriminator(positive, summary)
-        negative = self.discriminator(negative, summary)
-
-        l1 = self.loss(positive, torch.ones_like(positive))
-        l2 = self.loss(negative, torch.zeros_like(negative))
-
-        return l1 + l2
-
-
-class GAE(nn.Module):
-    def __init__(self, encoder, **kwargs):
-        super(GAE, self).__init__()
-        self.encoder = encoder
-        self.loss_fn = nn.BCEWithLogitsLoss()
-
-    def score_pairs(self, embs, nodes_x, nodes_y):
-        return (embs[nodes_x] * embs[nodes_y]).sum(dim=1)
-
-    def forward(self, x, edge_index, edges_pos, edges_neg):
-        device = next(self.parameters()).device
-        edges_pos = edges_pos.to(device)
-        edges_neg = edges_neg.to(device)
-
-        z = self.encoder(x, edge_index)
-        # Get scores for edges using inner product
-        pos_score = (z[edges_pos[0]] * z[edges_pos[1]]).sum(dim=1)
-        neg_score = (z[edges_neg[0]] * z[edges_neg[1]]).sum(dim=1)
-        preds = torch.cat((pos_score, neg_score))
-
-        targets = torch.cat((torch.ones_like(pos_score),
-                             torch.zeros_like(neg_score)))
-        cost = self.loss_fn(preds, targets)
-
-        return cost
 
 
 class SGE(nn.Module):

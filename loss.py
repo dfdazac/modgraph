@@ -9,3 +9,5 @@ def bce_loss(pos_score, neg_score):
     return F.binary_cross_entropy_with_logits(preds, targets)
 
 
+def square_exponential(pos_score, neg_score):
+    return (pos_score ** 2 + torch.exp(neg_score)).mean()

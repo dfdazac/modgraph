@@ -138,5 +138,5 @@ class GCNMLPEncoder(nn.Module):
 
     def forward(self, x, edge_index):
         out = F.relu(self.gcn_in(x, edge_index))
-        out = self.linear_mu(out)
+        out = self.linear_out(out)
         return out
