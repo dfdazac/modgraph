@@ -43,11 +43,8 @@ def build_method(encoder_str, num_features, dimensions, repr_str, loss_str,
     else:
         raise ValueError(f'Unknown representation {repr_str}')
 
-    if loss_str == 'bce_loss':
-        loss = modgraph.bce_loss
-    elif loss_str == 'square_exponential':
-        loss = modgraph.square_exponential
-    else:
+    loss = getattr(modgraph, loss_str, None)
+    if loss is None:
         raise ValueError(f'Unknown loss {loss_str}')
 
     if sampling_str == 'first_neighbors':
@@ -243,9 +240,9 @@ def config():
     """
     dataset_str = 'cora'
 
-    encoder_str = 'sgc'
+    encoder_str = 'gcn'
     repr_str = 'euclidean_inner'
-    loss_str = 'square_exponential'
+    loss_str = 'bce_loss'
     sampling_str = 'first_neighbors'
 
     dimensions = [256, 128]
