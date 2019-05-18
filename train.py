@@ -17,7 +17,7 @@ def build_method(encoder_str, num_features, dimensions, repr_str, loss_str,
     emb_dim = dimensions[-1]
     if repr_str == 'gaussian':
         emb_dim = dimensions[-1] * 2
-        dimensions[-1] = emb_dim
+        dimensions = dimensions[:-1] + [emb_dim]
 
     if encoder_str == 'mlp':
         encoder_class = modgraph.MLPEncoder
