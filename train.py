@@ -277,6 +277,51 @@ def log_statistics(results, metrics, timestamp, _run):
 
 
 @ex.command
+def hparam_search(dataset_str, edge_score, lr, epochs, n_exper, device,
+                  timestamp, _run):
+    import sherpa
+
+    parameters = [sherpa.Choice('encoder_str',
+                                range=['mlp', 'gcn', 'sgc', 'gcnmlp']),
+                  sherpa.Choice('repr_str',
+                                range=['euclidean_inner',
+                                       'euclidean_bilinear',
+                                       'euclidean_distance',
+                                       'gaussian']),
+                  sherpa.Choice('loss_str',
+                                range=['bce_loss',
+                                       'square_exponential_loss',
+                                       'square_square_loss',
+                                       'hinge_loss']),
+                  sherpa.Choice('sampling_str',
+                                range=['first_neighbors',
+                                       'graph_corruption',
+                                       'ranked'])]
+
+    algorithm = sherpa.algorithms.GridSearch()
+    study = sherpa.Study(parameters, algorithm, lower_is_better=False)
+
+    for trial in study:
+        results = link_pred_experiments(dataset_str, **trial.parameters,
+                                        edge_score=edge_score, lr=lr,
+                                        epochs=epochs, train_node2vec=False,
+                                        n_exper=n_exper, device=device,
+                                        timestamp=timestamp)
+        results = results.reshape([3, 2])
+        objective = np.sum(results[-1])
+        study.add_observation(trial, iteration=0, objective=objective,
+                              context={'train_auc': results[0, 0],
+                                       'val_auc': results[1, 0],
+                                       'test_auc': results[2, 0],
+                                       'train_ap': results[0, 1],
+                                       'val_ap': results[1, 1],
+                                       'test_ap': results[2, 1]})
+        study.finalize(trial)
+
+    # TODO: save study
+
+
+@ex.command
 def link_pred_experiments(dataset_str, encoder_str, dimensions, repr_str,
                           loss_str, sampling_str, edge_score, lr,
                           epochs, train_node2vec, n_exper, device, timestamp,
@@ -308,6 +353,8 @@ def link_pred_experiments(dataset_str, encoder_str, dimensions, repr_str,
     log_statistics(results, ['train AUC', 'train AP',
                              'valid AUC', 'valid AP',
                              'test AUC', 'test AP'])
+
+    return results
 
 
 @ex.automain
