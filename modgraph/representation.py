@@ -9,7 +9,7 @@ class EuclideanInnerProduct:
     @staticmethod
     def score(z, pairs):
         result = (z[pairs[0]] * z[pairs[1]]).sum(dim=1)
-        return torch.sigmoid(result)
+        return result
 
     @staticmethod
     def score_link_pred(z, pairs):
@@ -25,7 +25,7 @@ class EuclideanBilinear(nn.Module):
 
     def score(self, summary, z):
         result = torch.matmul(z, torch.matmul(self.weight, summary))
-        return torch.sigmoid(result)
+        return result
 
     def forward(self, summary, z):
         return self.score(summary, z)
@@ -57,7 +57,7 @@ class EuclideanDistance:
         mu_x, mu_y = z[nodes_x], z[nodes_y]
         dist = torch.sum((mu_x - mu_y) ** 2, dim=1)
 
-        return torch.exp(-dist)
+        return -dist
 
     @staticmethod
     def score_link_pred(z, pairs):
@@ -97,7 +97,7 @@ class Gaussian:
         mu_diff_sq = (mu_x - mu_y)**2 / sigma_x
         mu_diff_sq = mu_diff_sq.sum(dim=1)
 
-        return torch.exp(-0.5 * (trace_fac + mu_diff_sq - L - log_det))
+        return -0.5 * (trace_fac + mu_diff_sq - L - log_det)
 
     @staticmethod
     def score_link_pred(z, pairs):

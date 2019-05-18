@@ -243,10 +243,10 @@ def config():
     """
     dataset_str = 'cora'
 
-    encoder_str = 'mlp'
-    repr_str = 'gaussian'
+    encoder_str = 'sgc'
+    repr_str = 'euclidean_inner'
     loss_str = 'square_exponential'
-    sampling_str = 'ranked'
+    sampling_str = 'first_neighbors'
 
     dimensions = [256, 128]
     edge_score = 'inner'
