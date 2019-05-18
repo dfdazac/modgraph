@@ -21,29 +21,32 @@ if not args.log:
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 config = {'dataset_str': None,
-          'method': 'sge',
-          'encoder_str': 'mlp',
-          'hidden_dims': [256, 128],
-          'n_points': None,
-          'lr': None,
+          'encoder_str': None,
+          'repr_str': None,
+          'loss_str': 'square_exponential',
+          'sampling_str': 'ranked',
+          'dimensions': [256, 128],
+          'edge_score': 'inner',
+          'lr': 1e-3,
           'epochs': 200,
           'p_labeled': 0.1,
           'n_exper': 20,
           'device': device,
-          'timestamp': str(int(datetime.now().timestamp())),
-          'edge_score': 'inner'}
+          'timestamp': str(int(datetime.now().timestamp()))}
 
 # Values to be changed in experiments
-param_grid = {'dataset_str': ['coauthorcs', 'coauthorphys',
-                              'amazoncomp', 'amazonphoto'],
-              'n_points': [1, 4, 8],
-              'lr': [1e-2, 1e-3, 1e-4]}
+param_grid = {'encoder_str': ['mlp', 'gcnmlp'],
+              'repr_str': ['gaussian', 'euclidean_distance'],
+              'dataset_str': ['cora', 'citeseer', 'pubmed', 'corafull',
+                              'coauthorcs', 'coauthorphys',
+                              'amazoncomp', 'amazonphoto']}
 
 grid = ParameterGrid(param_grid)
 
-for i, hparams in enumerate(grid):
-    print('Experiment configuration {:d}/{:d}'.format(i + 1, len(grid)))
-    config.update(hparams)
+for command in ['link_pred_experiments', 'node_class_experiments']:
+    for i, hparams in enumerate(grid):
+        print('Experiment configuration {:d}/{:d}'.format(i + 1, len(grid)))
+        config.update(hparams)
 
-    pp.pprint(config)
-    ex.run(command_name='link_pred_experiments', config_updates=config)
+        pp.pprint(config)
+        ex.run(command_name=command, config_updates=config)
