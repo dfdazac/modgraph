@@ -6,8 +6,7 @@ from sacred.observers import MongoObserver
 
 from utils import (get_data, get_data_splits,
                    score_node_classification,
-                   train_link_prediction, link_prediction_scores,
-                   score_node_classification_sets)
+                   train_link_prediction, link_prediction_scores)
 
 import models
 from encoder import *
@@ -172,12 +171,6 @@ def train(dataset, method, lr, epochs, device_str, link_prediction=False,
         method.eval()
         embeddings = method.encoder(x, edge_index).detach().cpu()
 
-        # if method in ['sge', 'sgemetric']:
-        #     points = embeddings.reshape(data.num_nodes, n_points, -1)
-        #     mean = points.mean(dim=1, keepdim=True)
-        #     stdev = torch.sqrt(torch.sum((points - mean)**2, dim=-1)).mean()
-        #     print('Average distance from mean: {:.6f}'.format(stdev.item()))
-
     results = -np.ones([3, 2])
     if link_prediction:
         if edge_score_class is None:
@@ -210,9 +203,11 @@ def train(dataset, method, lr, epochs, device_str, link_prediction=False,
         for (auc_res, ap_res), split in zip(results, ['train', 'val', 'test']):
             print('{:5} - auc: {:.6f} ap: {:.6f}'.format(split, auc_res, ap_res))
 
-    if method in ['graph2gauss', 'graph2vec']:
+    if isinstance(method.representation, Gaussian):
         # Use the mean for downstream tasks
-        embeddings = embeddings[0]
+        emb_dim = embeddings.shape[1] // 2
+        mu, logsigma = torch.split(embeddings, emb_dim, dim=1)
+        embeddings = mu
 
     return embeddings, results
 
@@ -237,7 +232,6 @@ def config():
     method (str): one of {'gae', 'dgi', 'graph2gauss', 'node2vec'}
     encoder_str (str): one of {'mlp', 'gcn', 'sgc'}
     hidden_dims (list): List with number of units in each layer of the encoder
-    n_points (int): Number of support points, only used in Sinkhorn embeddings
     lr (float): learning rate
     epochs (int): number of epochs for training
     p_labeled (float): percentage of labeled nodes used for node classification
@@ -249,13 +243,12 @@ def config():
     """
     dataset_str = 'cora'
 
-    encoder_str = 'mlp'
-    repr_str = 'gaussian'
-    loss_str = 'square_exponential'
-    sampling_str = 'ranked'
+    encoder_str = 'gcn'
+    repr_str = 'euclidean_bilinear'
+    loss_str = 'bce_loss'
+    sampling_str = 'graph_corruption'
 
     dimensions = [256, 128]
-    n_points = 1
     edge_score = 'inner'
     lr = 0.001
     epochs = 200
@@ -287,7 +280,7 @@ def log_statistics(results, metrics, timestamp, _run):
 
 @ex.command
 def link_pred_experiments(dataset_str, encoder_str, dimensions, repr_str,
-                          loss_str, sampling_str, n_points, edge_score, lr,
+                          loss_str, sampling_str, edge_score, lr,
                           epochs, n_exper, device, timestamp, _run):
     torch.random.manual_seed(0)
     np.random.seed(0)
@@ -314,7 +307,7 @@ def link_pred_experiments(dataset_str, encoder_str, dimensions, repr_str,
 
 @ex.automain
 def node_class_experiments(dataset_str, encoder_str, dimensions, repr_str,
-                           loss_str, sampling_str, n_points, lr, epochs,
+                           loss_str, sampling_str, lr, epochs,
                            p_labeled, n_exper, device, timestamp, _run):
     torch.random.manual_seed(0)
     np.random.seed(0)
@@ -328,22 +321,14 @@ def node_class_experiments(dataset_str, encoder_str, dimensions, repr_str,
                               repr_str, loss_str, sampling_str)
         embeddings, _ = train(dataset, method, lr, epochs,
                               device, seed=i, ckpt_name=timestamp)
-        # if method == 'sge':
-        #     embeddings = embeddings.reshape(-1, n_points,
-        #                                     hidden_dims[-1]//n_points)
 
         embeddings = embeddings.numpy()
         data = get_data(dataset_str)
         labels = data.y.cpu().numpy()
-        if method == 'sge':
-            test_acc = score_node_classification_sets(embeddings, labels,
-                                                      models.DeepSetClassifier,
-                                                      device, p_labeled,
-                                                      seed=i)
-        else:
-            train_acc, test_acc = score_node_classification(embeddings,
-                                                            labels, p_labeled,
-                                                            seed=i)
+
+        train_acc, test_acc = score_node_classification(embeddings,
+                                                        labels, p_labeled,
+                                                        seed=i)
 
         print('train - acc: {:.6f}'.format(train_acc))
         print('test  - acc: {:.6f}'.format(test_acc))
