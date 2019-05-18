@@ -29,13 +29,14 @@ config = {'dataset_str': None,
           'edge_score': 'inner',
           'lr': 1e-3,
           'epochs': 200,
+          'train_node2vec': False,
           'p_labeled': 0.1,
           'n_exper': 20,
           'device': device,
           'timestamp': str(int(datetime.now().timestamp()))}
 
 # Values to be changed in experiments
-param_grid = {'encoder_str': ['mlp', 'gcnmlp'],
+param_grid = {'encoder_str': ['mlp', 'gcnmlp', 'sgc'],
               'repr_str': ['gaussian', 'euclidean_distance'],
               'dataset_str': ['cora', 'citeseer', 'pubmed', 'corafull',
                               'coauthorcs', 'coauthorphys',

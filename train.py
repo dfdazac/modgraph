@@ -252,7 +252,7 @@ def config():
     edge_score = 'inner'
     lr = 0.001
     epochs = 200
-    train_node2vec = True
+    train_node2vec = False
     p_labeled = 0.1
     n_exper = 20
     device = 'cuda'
@@ -337,12 +337,12 @@ def node_class_experiments(dataset_str, encoder_str, dimensions, repr_str,
                               device, seed=i, ckpt_name=timestamp)
 
         embeddings = embeddings.numpy()
-        data = utils.get_data(dataset_str)
-        labels = data.y.cpu().numpy()
+        labels = dataset.y.cpu().numpy()
 
         train_acc, test_acc = utils.score_node_classification(embeddings,
-                                                        labels, p_labeled,
-                                                        seed=i)
+                                                              labels,
+                                                              p_labeled,
+                                                              seed=i)
 
         print('train - acc: {:.6f}'.format(train_acc))
         print('test  - acc: {:.6f}'.format(test_acc))
