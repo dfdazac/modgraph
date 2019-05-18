@@ -250,9 +250,9 @@ def config():
     dataset_str = 'cora'
 
     encoder_str = 'mlp'
-    repr_str = 'euclidean_distance'
+    repr_str = 'gaussian'
     loss_str = 'square_exponential'
-    sampling_str = 'ranked'
+    sampling_str = 'graph_corruption'
 
     dimensions = [256, 128]
     n_points = 1
