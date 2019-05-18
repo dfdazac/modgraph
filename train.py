@@ -81,11 +81,12 @@ def train(dataset, method, lr, epochs, device_str, link_prediction=False,
     device = torch.device(device_str)
 
     # Load and split data
-    if not link_prediction and method.sampling_class == FirstNeighborSampling:
-        neg_sample_mult = 10
-        resample_neg = True
-        # GAE objective is link prediction
-        link_prediction = True
+    if not link_prediction and method != 'node2vec':
+        if method.sampling_class == FirstNeighborSampling:
+            neg_sample_mult = 10
+            resample_neg = True
+            # GAE objective is link prediction
+            link_prediction = True
     else:
         neg_sample_mult = 1
         resample_neg = False
@@ -97,15 +98,14 @@ def train(dataset, method, lr, epochs, device_str, link_prediction=False,
     train_pos, val_pos, test_pos = pos_split
     train_neg, val_neg, test_neg = neg_split
 
-    train_sampler = method.sampling_class(epochs, train_pos,
-                                          neg_index=train_neg,
-                                          resample=resample_neg,
-                                          num_nodes=dataset.num_nodes)
-
     x = dataset.x.to(device)
     edge_index = train_pos.to(device)
     # Train model
     if isinstance(method, models.EmbeddingMethod):
+        train_sampler = method.sampling_class(epochs, train_pos,
+                                              neg_index=train_neg,
+                                              resample=resample_neg,
+                                              num_nodes=dataset.num_nodes)
         train_iter = make_sample_iterator(train_sampler, num_workers=2)
 
         if ckpt_name is None:
@@ -160,10 +160,9 @@ def train(dataset, method, lr, epochs, device_str, link_prediction=False,
         method.load_state_dict(torch.load(ckpt_name))
         os.remove(ckpt_name)
     elif method == 'node2vec':
-        # FIXME
-        model = None # models.Node2Vec(train_pos, data.num_nodes, dimensions[-1])
+        method = models.Node2Vec(train_pos, dataset.num_nodes).to(device)
     else:
-        model = None
+        raise ValueError('Unknown method')
 
     if method == 'raw':
         embeddings = x.cpu()
@@ -252,6 +251,7 @@ def config():
     edge_score = 'inner'
     lr = 0.001
     epochs = 200
+    train_node2vec = True
     p_labeled = 0.1
     n_exper = 20
     device = 'cuda'
@@ -281,7 +281,8 @@ def log_statistics(results, metrics, timestamp, _run):
 @ex.command
 def link_pred_experiments(dataset_str, encoder_str, dimensions, repr_str,
                           loss_str, sampling_str, edge_score, lr,
-                          epochs, n_exper, device, timestamp, _run):
+                          epochs, train_node2vec, n_exper, device, timestamp,
+                          _run):
     torch.random.manual_seed(0)
     np.random.seed(0)
     results = np.empty([n_exper, 6])
@@ -292,8 +293,11 @@ def link_pred_experiments(dataset_str, encoder_str, dimensions, repr_str,
         print('\nTrial {:d}/{:d}'.format(i + 1, n_exper))
 
         dataset = get_data(dataset_str)
-        method = build_method(encoder_str, dataset.num_features, dimensions,
-                              repr_str, loss_str, sampling_str)
+        if train_node2vec:
+            method = 'node2vec'
+        else:
+            method = build_method(encoder_str, dataset.num_features, dimensions,
+                                  repr_str, loss_str, sampling_str)
         _, scores = train(dataset, method, lr, epochs,
                           device, link_prediction=True, seed=i,
                           ckpt_name=timestamp, edge_score=edge_score)
@@ -307,7 +311,7 @@ def link_pred_experiments(dataset_str, encoder_str, dimensions, repr_str,
 
 @ex.automain
 def node_class_experiments(dataset_str, encoder_str, dimensions, repr_str,
-                           loss_str, sampling_str, lr, epochs,
+                           loss_str, sampling_str, lr, epochs, train_node2vec,
                            p_labeled, n_exper, device, timestamp, _run):
     torch.random.manual_seed(0)
     np.random.seed(0)
@@ -317,8 +321,11 @@ def node_class_experiments(dataset_str, encoder_str, dimensions, repr_str,
         print('\nTrial {:d}/{:d}'.format(i + 1, n_exper))
 
         dataset = get_data(dataset_str)
-        method = build_method(encoder_str, dataset.num_features, dimensions,
-                              repr_str, loss_str, sampling_str)
+        if train_node2vec:
+            method = 'node2vec'
+        else:
+            method = build_method(encoder_str, dataset.num_features, dimensions,
+                                  repr_str, loss_str, sampling_str)
         embeddings, _ = train(dataset, method, lr, epochs,
                               device, seed=i, ckpt_name=timestamp)
 

@@ -6,7 +6,7 @@ from node2vec import node2vec
 from gensim.models import Word2Vec
 from utils import adj_from_edge_index
 
-from representation import EuclideanBilinear
+from representation import EuclideanInnerProduct, EuclideanBilinear
 
 
 class EmbeddingMethod(nn.Module):
@@ -85,6 +85,7 @@ class Node2Vec(nn.Module):
 
         all_embs = torch.tensor(embeddings, dtype=torch.float32)
         self.encoder = LookupEncoder(all_embs)
+        self.representation = EuclideanInnerProduct()
 
     def score_pairs(self, embs, nodes_x, nodes_y):
         return (embs[nodes_x] * embs[nodes_y]).sum(dim=1)
