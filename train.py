@@ -252,17 +252,17 @@ def config():
     encoder_str = 'mlp'
     repr_str = 'gaussian'
     loss_str = 'square_exponential'
-    sampling_str = 'graph_corruption'
+    sampling_str = 'ranked'
 
     dimensions = [256, 128]
     n_points = 1
     edge_score = 'inner'
     lr = 0.001
     epochs = 200
+    p_labeled = 0.1
     n_exper = 20
     device = 'cuda'
     timestamp = str(int(datetime.now().timestamp()))
-    p_labeled = 0.1
 
 
 @ex.capture

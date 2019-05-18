@@ -7,7 +7,7 @@ from node2vec import node2vec
 from gensim.models import Word2Vec
 from utils import adj_from_edge_index
 
-from sampling import GraphCorruptionSampling
+from representation import EuclideanBilinear
 
 
 class EmbeddingMethod(nn.Module):
@@ -24,7 +24,7 @@ class EmbeddingMethod(nn.Module):
         return self.representation.score_link_pred(z, pairs)
 
     def forward(self, x, edge_index, pos_samples, neg_samples):
-        if self.sampling_class == GraphCorruptionSampling:
+        if isinstance(self.representation, EuclideanBilinear):
             pos_samples = self.encoder(x, pos_samples)
             neg_samples = self.encoder(x, neg_samples)
             summary = torch.sigmoid(pos_samples.mean(dim=0))

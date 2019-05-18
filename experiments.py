@@ -21,21 +21,23 @@ if not args.log:
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 config = {'dataset_str': None,
-          'method': None,
           'encoder_str': None,
-          'hidden_dims': [256, 128],
+          'repr_str': None,
+          'loss_str': 'square_exponential',
+          'sampling_str': 'ranked',
+          'dimensions': [256, 128],
           'n_points': 1,
+          'edge_score': 'inner',
           'lr': 1e-3,
           'epochs': 200,
           'p_labeled': 0.1,
           'n_exper': 20,
           'device': device,
-          'timestamp': str(int(datetime.now().timestamp())),
-          'edge_score': 'inner'}
+          'timestamp': str(int(datetime.now().timestamp()))}
 
 # Values to be changed in experiments
-param_grid = {'method': ['graph2gauss', 'graph2vec'],
-              'encoder_str': ['mlpgauss', 'gcngauss'],
+param_grid = {'encoder_str': ['mlp', 'gcnmlp'],
+              'repr_str': ['gaussian', 'euclidean_distance'],
               'dataset_str': ['cora', 'citeseer', 'pubmed', 'corafull',
                               'coauthorcs', 'coauthorphys',
                               'amazoncomp', 'amazonphoto']}
