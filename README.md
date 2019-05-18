@@ -81,11 +81,11 @@ Two commands are available: `link_pred_experiments` and `node_class_experiments`
 To train GAE and evaluate it in the link prediction task using the Cora dataset, run
 
 ```sh
-python train.py with dataset_str='cora'\
-encoder_str='gcn'\
-repr_str='euclidean_inner'\
-loss_str='bce_loss'\
-sampling_str='first_neighbors'\
+python train.py with dataset_str='cora' \
+encoder_str='gcn' \
+repr_str='euclidean_inner' \
+loss_str='bce_loss' \
+sampling_str='first_neighbors' \
 n_exper=1
 ```
 
