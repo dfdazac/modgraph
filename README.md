@@ -1,4 +1,4 @@
-### A Modular Framework for Unsupervised Graph Representation Learning
+## A Modular Framework for Unsupervised Graph Representation Learning
 
 Methods for unsupervised representation learning on graphs can be described in terms of modules:
 
@@ -54,7 +54,7 @@ embeddings, results = train(dataset, method)
 ```
 
 
-**Instructions**
+### Instructions
 
 Create a conda environment with all the requirements (edit `environment.yml` if you want to change the name of the environment):
 
