@@ -53,7 +53,7 @@ def build_method(encoder_str, num_features, dimensions, repr_str, loss_str,
     else:
         raise ValueError(f'Unknown loss {loss_str}')
 
-    if sampling_str == 'first_neighbor':
+    if sampling_str == 'first_neighbors':
         sampling_class = FirstNeighborSampling
     elif sampling_str == 'graph_corruption':
         sampling_class = GraphCorruptionSampling
@@ -225,33 +225,37 @@ else:
 @ex.config
 def config():
     """
-    dataset_str (str): one of {'cora', 'citeseer', 'pubmed', 'corafull',
-                               'coauthorcs, 'coauthorphys', 'amazoncomp',
-                               'amazonphoto'}
-    method (str): one of {'gae', 'dgi', 'graph2gauss', 'node2vec'}
-    encoder_str (str): one of {'mlp', 'gcn', 'sgc'}
-    hidden_dims (list): List with number of units in each layer of the encoder
+    dataset_str (str): {'cora', 'citeseer', 'pubmed', 'corafull',
+                        'coauthorcs, 'coauthorphys', 'amazoncomp',
+                        'amazonphoto'}
+    encoder_str (str): {'mlp', 'gcn', 'gcnmlp'}
+    repr_str (str): {'euclidean_inner', 'euclidean_bilinear', 'gaussian',
+                     'euclidean_distance'}
+    loss_str (str): {'bce_loss', 'square_exponential'}
+    sampling_str (str): {'first_neighbors', 'ranked', 'graph_corruption'}
+    dimensions (list): List with number of units in each layer of the encoder
+    edge_score (str): scoring function used for link prediction. One of
+        {'inner', 'bilinear'}
     lr (float): learning rate
     epochs (int): number of epochs for training
+    train_node2vec (bool): if True, ignore method and train with node2vec
     p_labeled (float): percentage of labeled nodes used for node classification
     n_exper (int): number of experiments to repeat with different random seeds
     device (str): one of {'cpu', 'cuda'}
     timestamp (int): unique identifier for a set of experiments
-    edge_score (str): scoring function used for link prediction. One of
-        {'inner', 'bilinear'}
     """
     dataset_str = 'cora'
 
     encoder_str = 'gcn'
-    repr_str = 'euclidean_bilinear'
+    repr_str = 'euclidean_inner'
     loss_str = 'bce_loss'
-    sampling_str = 'graph_corruption'
+    sampling_str = 'first_neighbors'
 
     dimensions = [256, 128]
     edge_score = 'inner'
     lr = 0.001
     epochs = 200
-    train_node2vec = True
+    train_node2vec = False
     p_labeled = 0.1
     n_exper = 20
     device = 'cuda'
