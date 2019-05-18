@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from torch_geometric.nn.inits import glorot
 
 
-class Euclidean:
+class EuclideanInnerProduct:
     """Euclidean representation with an inner product score"""
     @staticmethod
     def score(z, pairs):
@@ -13,11 +13,11 @@ class Euclidean:
 
     @staticmethod
     def score_link_pred(z, pairs):
-        return Euclidean.score(z, pairs)
+        return EuclideanInnerProduct.score(z, pairs)
 
 
 class EuclideanBilinear(nn.Module):
-    """Euclidean representation with a bilinear product score"""
+    """Euclidean representation with a parameterized bilinear product score"""
     def __init__(self, in_features):
         super(EuclideanBilinear, self).__init__()
         self.weight = nn.Parameter(torch.Tensor(in_features, in_features))
@@ -32,12 +32,13 @@ class EuclideanBilinear(nn.Module):
 
     @staticmethod
     def score_link_pred(z, pairs):
-        return Euclidean.score(z, pairs)
+        return EuclideanInnerProduct.score(z, pairs)
 
 
-class Gaussian:
+class EuclideanDistance:
+    """Euclidean representation with an L2 distance score"""
     @staticmethod
-    def score(embs, pairs):
+    def score(z, pairs):
         """
         Computes the energy of a set of node pairs as the KL divergence between
         their respective Gaussian embeddings.
@@ -52,8 +53,37 @@ class Gaussian:
         energy : array-like, shape [?]
             The energy of each pair given the currently learned model
         """
-        emb_dim = embs.shape[1]//2
-        mu, logsigma = torch.split(embs, emb_dim, dim=1)
+        nodes_x, nodes_y = pairs
+        mu_x, mu_y = z[nodes_x], z[nodes_y]
+        dist = torch.sum((mu_x - mu_y) ** 2, dim=1)
+
+        return -dist
+
+    @staticmethod
+    def score_link_pred(z, pairs):
+        return EuclideanDistance.score(z, pairs)
+
+
+class Gaussian:
+    """Gaussian distribution representation with a -KL divergence score"""
+    @staticmethod
+    def score(z, pairs):
+        """
+        Computes the energy of a set of node pairs as the KL divergence between
+        their respective Gaussian embeddings.
+
+        Parameters
+        ----------
+        pairs : array-like, shape [?, 2]
+            The edges/non-edges for which the energy is calculated
+
+        Returns
+        -------
+        energy : array-like, shape [?]
+            The energy of each pair given the currently learned model
+        """
+        emb_dim = z.shape[1] // 2
+        mu, logsigma = torch.split(z, emb_dim, dim=1)
         sigma = F.elu(logsigma) + 1 + 1e-14
         nodes_x, nodes_y = pairs
         L = mu.shape[1]
@@ -70,5 +100,5 @@ class Gaussian:
         return -0.5 * (trace_fac + mu_diff_sq - L - log_det)
 
     @staticmethod
-    def score_link_pred(embs, pairs):
-        return Gaussian.score(embs, pairs)
+    def score_link_pred(z, pairs):
+        return Gaussian.score(z, pairs)

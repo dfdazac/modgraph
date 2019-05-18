@@ -36,10 +36,12 @@ def build_method(encoder_str, num_features, dimensions, repr_str, loss_str,
 
     encoder = encoder_class(num_features, dimensions)
 
-    if repr_str == 'euclidean':
-        representation = Euclidean()
+    if repr_str == 'euclidean_inner':
+        representation = EuclideanInnerProduct()
     elif repr_str == 'euclidean_bilinear':
         representation = EuclideanBilinear(in_features=emb_dim)
+    elif repr_str == 'euclidean_distance':
+        representation = EuclideanDistance()
     elif repr_str == 'gaussian':
         representation = Gaussian()
     else:
@@ -248,7 +250,7 @@ def config():
     dataset_str = 'cora'
 
     encoder_str = 'mlp'
-    repr_str = 'gaussian'
+    repr_str = 'euclidean_distance'
     loss_str = 'square_exponential'
     sampling_str = 'ranked'
 
