@@ -11,7 +11,6 @@ from sklearn.model_selection import (StratifiedShuffleSplit, GridSearchCV,
 from sklearn.linear_model import LogisticRegressionCV
 from skorch.classifier import NeuralNetClassifier, NeuralNetBinaryClassifier
 from skorch.callbacks import EarlyStopping
-from skorch import NeuralNet
 
 
 def sample_zero_entries(edge_index, seed, sample_mult=1.0):
@@ -388,9 +387,7 @@ def score_node_classification_sets(features, targets, model_class, device_str,
     return accuracy
 
 
-def get_data(dataset_str):
-    path = osp.join(osp.dirname(osp.realpath(__file__)), 'data', dataset_str)
-
+def get_data(dataset_str, path):
     if dataset_str in ('cora', 'citeseer', 'pubmed'):
         dataset = Planetoid(path, dataset_str)
     elif dataset_str == 'corafull':

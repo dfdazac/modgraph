@@ -3,7 +3,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 import networkx as nx
 
-from utils import adj_from_edge_index, get_hops, sample_triplets
+from .utils import adj_from_edge_index, get_hops, sample_triplets
 
 
 class NodeSampling(Dataset):

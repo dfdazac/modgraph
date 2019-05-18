@@ -1,18 +1,15 @@
 import os
+import os.path as osp
 from datetime import datetime
-
+import torch
+import numpy as np
 from sacred import Experiment
 from sacred.observers import MongoObserver
 
-from utils import (get_data, get_data_splits,
-                   score_node_classification,
-                   train_link_prediction, link_prediction_scores)
+import modgraph
+import modgraph.utils as utils
 
-import models
-from encoder import *
-from representation import *
-from loss import *
-from sampling import *
+root = osp.dirname(osp.realpath(__file__))
 
 
 def build_method(encoder_str, num_features, dimensions, repr_str, loss_str,
@@ -23,46 +20,46 @@ def build_method(encoder_str, num_features, dimensions, repr_str, loss_str,
         dimensions[-1] = emb_dim
 
     if encoder_str == 'mlp':
-        encoder_class = MLPEncoder
+        encoder_class = modgraph.MLPEncoder
     elif encoder_str == 'gcn':
-        encoder_class = GCNEncoder
+        encoder_class = modgraph.GCNEncoder
     elif encoder_str == 'sgc':
-        encoder_class = SGCEncoder
+        encoder_class = modgraph.SGCEncoder
     elif encoder_str == 'gcnmlp':
-        encoder_class = GCNMLPEncoder
+        encoder_class = modgraph.GCNMLPEncoder
     else:
         raise ValueError(f'Unknown encoder {encoder_str}')
 
     encoder = encoder_class(num_features, dimensions)
 
     if repr_str == 'euclidean_inner':
-        representation = EuclideanInnerProduct()
+        representation = modgraph.EuclideanInnerProduct()
     elif repr_str == 'euclidean_bilinear':
-        representation = EuclideanBilinear(in_features=emb_dim)
+        representation = modgraph.EuclideanBilinear(in_features=emb_dim)
     elif repr_str == 'euclidean_distance':
-        representation = EuclideanDistance()
+        representation = modgraph.EuclideanDistance()
     elif repr_str == 'gaussian':
-        representation = Gaussian()
+        representation = modgraph.Gaussian()
     else:
         raise ValueError(f'Unknown representation {repr_str}')
 
     if loss_str == 'bce_loss':
-        loss = bce_loss
+        loss = modgraph.bce_loss
     elif loss_str == 'square_exponential':
-        loss = square_exponential
+        loss = modgraph.square_exponential
     else:
         raise ValueError(f'Unknown loss {loss_str}')
 
     if sampling_str == 'first_neighbors':
-        sampling_class = FirstNeighborSampling
+        sampling_class = modgraph.FirstNeighborSampling
     elif sampling_str == 'graph_corruption':
-        sampling_class = GraphCorruptionSampling
+        sampling_class = modgraph.GraphCorruptionSampling
     elif sampling_str == 'ranked':
-        sampling_class = RankedSampling
+        sampling_class = modgraph.RankedSampling
     else:
         raise ValueError(f'Unknown sampling {sampling_str}')
 
-    return models.EmbeddingMethod(encoder, representation, loss, sampling_class)
+    return modgraph.EmbeddingMethod(encoder, representation, loss, sampling_class)
 
 
 def train(dataset, method, lr, epochs, device_str, link_prediction=False,
@@ -70,7 +67,7 @@ def train(dataset, method, lr, epochs, device_str, link_prediction=False,
     if edge_score == 'inner':
         edge_score_class = None
     elif edge_score == 'bilinear':
-        edge_score_class = models.BilinearScore
+        edge_score_class = modgraph.BilinearScore
     else:
         raise ValueError(f'Unknown edge score {edge_score}')
 
@@ -81,18 +78,17 @@ def train(dataset, method, lr, epochs, device_str, link_prediction=False,
     device = torch.device(device_str)
 
     # Load and split data
+    neg_sample_mult = 1
+    resample_neg = False
     if not link_prediction and method != 'node2vec':
-        if method.sampling_class == FirstNeighborSampling:
+        if method.sampling_class == modgraph.FirstNeighborSampling:
             neg_sample_mult = 10
             resample_neg = True
             # GAE objective is link prediction
             link_prediction = True
-    else:
-        neg_sample_mult = 1
-        resample_neg = False
 
     add_self_connections = method == 'node2vec'
-    pos_split, neg_split = get_data_splits(dataset, neg_sample_mult,
+    pos_split, neg_split = utils.get_data_splits(dataset, neg_sample_mult,
                                            link_prediction,
                                            add_self_connections, seed)
     train_pos, val_pos, test_pos = pos_split
@@ -101,15 +97,16 @@ def train(dataset, method, lr, epochs, device_str, link_prediction=False,
     x = dataset.x.to(device)
     edge_index = train_pos.to(device)
     # Train model
-    if isinstance(method, models.EmbeddingMethod):
+    if isinstance(method, modgraph.EmbeddingMethod):
         train_sampler = method.sampling_class(epochs, train_pos,
                                               neg_index=train_neg,
                                               resample=resample_neg,
                                               num_nodes=dataset.num_nodes)
-        train_iter = make_sample_iterator(train_sampler, num_workers=2)
+        train_iter = modgraph.make_sample_iterator(train_sampler, num_workers=2)
 
         if ckpt_name is None:
             ckpt_name = 'model'
+        ckpt_path = osp.join(root, ckpt_name)
 
         print(f'Training {method}')
 
@@ -127,18 +124,18 @@ def train(dataset, method, lr, epochs, device_str, link_prediction=False,
             loss.backward()
             optimizer.step()
 
-            if link_prediction or method.sampling_class == FirstNeighborSampling:
+            if link_prediction or method.sampling_class == modgraph.FirstNeighborSampling:
                 # Evaluate on val edges
                 with torch.no_grad():
                     pos_scores = method.score_pairs(x, edge_index, val_pos)
                     neg_scores = method.score_pairs(x, edge_index, val_neg)
 
-                auc, ap = link_prediction_scores(pos_scores, neg_scores)
+                auc, ap = utils.link_prediction_scores(pos_scores, neg_scores)
 
                 if auc > best_auc:
                     # Keep best model on val set
                     best_auc = auc
-                    torch.save(method.state_dict(), ckpt_name)
+                    torch.save(method.state_dict(), ckpt_path)
 
                 if epoch % 50 == 0:
                     time = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -152,15 +149,15 @@ def train(dataset, method, lr, epochs, device_str, link_prediction=False,
                 log = '[{}] [{:03d}/{:03d}] train loss: {:.6f}'
                 print(log.format(time, epoch, epochs, loss.item()))
 
-        if not link_prediction and not isinstance(method.sampling_class, FirstNeighborSampling):
+        if not link_prediction and not isinstance(method.sampling_class, modgraph.FirstNeighborSampling):
             # Save the last state
-            torch.save(method.state_dict(), ckpt_name)
+            torch.save(method.state_dict(), ckpt_path)
 
         # Load best checkpoint
-        method.load_state_dict(torch.load(ckpt_name))
-        os.remove(ckpt_name)
+        method.load_state_dict(torch.load(ckpt_path))
+        os.remove(ckpt_path)
     elif method == 'node2vec':
-        method = models.Node2Vec(train_pos, dataset.num_nodes).to(device)
+        method = modgraph.Node2Vec(train_pos, dataset.num_nodes).to(device)
     else:
         raise ValueError('Unknown method')
 
@@ -179,7 +176,7 @@ def train(dataset, method, lr, epochs, device_str, link_prediction=False,
                 pos_scores = method.representation.score_link_pred(embeddings, pos)
                 # neg_scores = method.score_pairs(x, edge_index, neg)
                 neg_scores = method.representation.score_link_pred(embeddings, neg)
-                results[i] = link_prediction_scores(pos_scores, neg_scores)
+                results[i] = utils.link_prediction_scores(pos_scores, neg_scores)
         else:
             if method in ['graph2gauss', 'graph2vec']:
                 # Use the mean for downstream evaluation
@@ -191,7 +188,7 @@ def train(dataset, method, lr, epochs, device_str, link_prediction=False,
             train_val_pos = torch.cat((train_pos, val_pos), dim=-1)
             train_val_neg = torch.cat((train_neg, val_neg), dim=-1)
 
-            scores = train_link_prediction(edge_score_class, embeddings,
+            scores = utils.train_link_prediction(edge_score_class, embeddings,
                                            train_val_pos, train_val_neg,
                                            test_pos, test_neg, device_str,
                                            seed)
@@ -202,7 +199,7 @@ def train(dataset, method, lr, epochs, device_str, link_prediction=False,
         for (auc_res, ap_res), split in zip(results, ['train', 'val', 'test']):
             print('{:5} - auc: {:.6f} ap: {:.6f}'.format(split, auc_res, ap_res))
 
-    if isinstance(method.representation, Gaussian):
+    if isinstance(method.representation, modgraph.Gaussian):
         # Use the mean for downstream tasks
         emb_dim = embeddings.shape[1] // 2
         mu, logsigma = torch.split(embeddings, emb_dim, dim=1)
@@ -246,16 +243,16 @@ def config():
     """
     dataset_str = 'cora'
 
-    encoder_str = 'gcn'
-    repr_str = 'euclidean_inner'
-    loss_str = 'bce_loss'
-    sampling_str = 'first_neighbors'
+    encoder_str = 'mlp'
+    repr_str = 'gaussian'
+    loss_str = 'square_exponential'
+    sampling_str = 'ranked'
 
     dimensions = [256, 128]
     edge_score = 'inner'
     lr = 0.001
     epochs = 200
-    train_node2vec = False
+    train_node2vec = True
     p_labeled = 0.1
     n_exper = 20
     device = 'cuda'
@@ -291,12 +288,15 @@ def link_pred_experiments(dataset_str, encoder_str, dimensions, repr_str,
     np.random.seed(0)
     results = np.empty([n_exper, 6])
     print('Experiment timestamp: ' + timestamp)
+
+    path = osp.join(root, 'data', dataset_str)
+    dataset = utils.get_data(dataset_str, path)
+
     for i in range(n_exper):
         if i == 16:
             print('wait')
         print('\nTrial {:d}/{:d}'.format(i + 1, n_exper))
 
-        dataset = get_data(dataset_str)
         if train_node2vec:
             method = 'node2vec'
         else:
@@ -321,10 +321,13 @@ def node_class_experiments(dataset_str, encoder_str, dimensions, repr_str,
     np.random.seed(0)
     results = np.empty([n_exper, 2])
     print('Experiment timestamp: ' + timestamp)
+
+    path = osp.join(root, 'data', dataset_str)
+    dataset = utils.get_data(dataset_str, path)
+
     for i in range(n_exper):
         print('\nTrial {:d}/{:d}'.format(i + 1, n_exper))
 
-        dataset = get_data(dataset_str)
         if train_node2vec:
             method = 'node2vec'
         else:
@@ -334,10 +337,10 @@ def node_class_experiments(dataset_str, encoder_str, dimensions, repr_str,
                               device, seed=i, ckpt_name=timestamp)
 
         embeddings = embeddings.numpy()
-        data = get_data(dataset_str)
+        data = utils.get_data(dataset_str)
         labels = data.y.cpu().numpy()
 
-        train_acc, test_acc = score_node_classification(embeddings,
+        train_acc, test_acc = utils.score_node_classification(embeddings,
                                                         labels, p_labeled,
                                                         seed=i)
 

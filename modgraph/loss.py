@@ -10,4 +10,4 @@ def bce_loss(pos_score, neg_score):
 
 
 def square_exponential(pos_score, neg_score):
-    return (torch.log(pos_score) ** 2 + torch.exp(neg_score)).mean()
+    return (torch.log(pos_score + 1e-8) ** 2 + torch.exp(neg_score)).mean()

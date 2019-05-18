@@ -1,15 +1,7 @@
-import numpy as np
-import networkx as nx
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch_geometric.nn import GCNConv, MessagePassing
-from torch_geometric.nn.inits import glorot
-from geomloss import SamplesLoss
-
-from node2vec import node2vec
-from gensim.models import Word2Vec
-from utils import adj_from_edge_index
 
 
 # Adapted from PyTorch Geometric

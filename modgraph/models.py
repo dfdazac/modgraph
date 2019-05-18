@@ -2,11 +2,11 @@ import numpy as np
 import networkx as nx
 import torch
 import torch.nn as nn
-from node2vec import node2vec
+from .node2vec import node2vec
 from gensim.models import Word2Vec
-from utils import adj_from_edge_index
+from .utils import adj_from_edge_index
 
-from representation import EuclideanInnerProduct, EuclideanBilinear
+from .representation import EuclideanInnerProduct, EuclideanBilinear
 
 
 class EmbeddingMethod(nn.Module):
