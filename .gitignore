@@ -123,5 +123,7 @@ saved/*
 # Data files
 data/*
 !data/.gitkeep
+logs/*
+!logs/.gitkeep
 
 .envrc

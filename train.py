@@ -236,7 +236,7 @@ def config():
     p_labeled (float): percentage of labeled nodes used for node classification
     n_exper (int): number of experiments to repeat with different random seeds
     device (str): one of {'cpu', 'cuda'}
-    timestamp (int): unique identifier for a set of experiments
+    timestamp (str): unique identifier for a set of experiments
     """
     dataset_str = 'cora'
 
@@ -299,7 +299,13 @@ def hparam_search(dataset_str, edge_score, lr, epochs, n_exper, device,
                                        'ranked'])]
 
     algorithm = sherpa.algorithms.GridSearch()
-    study = sherpa.Study(parameters, algorithm, lower_is_better=False)
+
+    output_dir = osp.join('./logs', timestamp)
+    if not osp.isdir(output_dir):
+        os.mkdir(output_dir)
+
+    study = sherpa.Study(parameters, algorithm, lower_is_better=False,
+                         output_dir=output_dir)
 
     for trial in study:
         results = link_pred_experiments(dataset_str, **trial.parameters,
@@ -317,8 +323,22 @@ def hparam_search(dataset_str, edge_score, lr, epochs, n_exper, device,
                                        'val_ap': results[1, 1],
                                        'test_ap': results[2, 1]})
         study.finalize(trial)
+        break
 
-    # TODO: save study
+    study.save()
+
+
+@ex.command
+def load_hparam_results(timestamp):
+    import sherpa
+
+    output_dir = osp.join('./logs', str(timestamp))
+    # noinspection PyUnusedLocal
+    study = sherpa.Study.load_dashboard(output_dir)
+
+    wait = ''
+    while wait != 'y':
+        wait = input('Enter y to stop: ')
 
 
 @ex.command
