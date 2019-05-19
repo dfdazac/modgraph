@@ -1,6 +1,7 @@
 import os
 import os.path as osp
 from datetime import datetime
+import random
 import torch
 import numpy as np
 from sacred import Experiment
@@ -60,7 +61,7 @@ def build_method(encoder_str, num_features, dimensions, repr_str, loss_str,
 
 
 def train(dataset, method, lr, epochs, device_str, link_prediction=False,
-          seed=0, ckpt_name=None, edge_score='inner'):
+          seed=0, ckpt_name='model', edge_score='inner'):
     if edge_score == 'inner':
         edge_score_class = None
     elif edge_score == 'bilinear':
@@ -101,9 +102,8 @@ def train(dataset, method, lr, epochs, device_str, link_prediction=False,
                                               num_nodes=dataset.num_nodes)
         train_iter = modgraph.make_sample_iterator(train_sampler, num_workers=2)
 
-        if ckpt_name is None:
-            ckpt_name = 'model'
-        ckpt_path = osp.join(root, ckpt_name)
+        rand_postfix = str(random.randint(0, 100000))
+        ckpt_path = osp.join(root, ckpt_name + rand_postfix + '.pt')
 
         print(f'Training {method}')
 
@@ -314,7 +314,7 @@ def hparam_search(dataset_str, edge_score, lr, epochs, n_exper, device,
                                         n_exper=n_exper, device=device,
                                         timestamp=timestamp)
         results = results.reshape([3, 2])
-        objective = np.sum(results[-1])
+        objective = float(np.sum(results[-1]))
         study.add_observation(trial, iteration=0, objective=objective,
                               context={'train_auc': results[0, 0],
                                        'val_auc': results[1, 0],
@@ -323,7 +323,6 @@ def hparam_search(dataset_str, edge_score, lr, epochs, n_exper, device,
                                        'val_ap': results[1, 1],
                                        'test_ap': results[2, 1]})
         study.finalize(trial)
-        break
 
     study.save()
 
@@ -337,8 +336,32 @@ def load_hparam_results(timestamp):
     study = sherpa.Study.load_dashboard(output_dir)
 
     wait = ''
-    while wait != 'y':
-        wait = input('Enter y to stop: ')
+    while wait != 'x':
+        wait = input('Enter x to exit: ')
+
+
+@ex.command
+def parallel_trial(dataset_str, edge_score, lr, epochs, n_exper, device,
+                   timestamp, _run):
+    import sherpa
+
+    client = sherpa.Client()
+    trial = client.get_trial()
+
+    results = link_pred_experiments(dataset_str, **trial.parameters,
+                                    edge_score=edge_score, lr=lr,
+                                    epochs=epochs, train_node2vec=False,
+                                    n_exper=n_exper, device=device,
+                                    timestamp=timestamp)
+    results = results.reshape([3, 2])
+    objective = float(np.sum(results[-1]))
+    client.send_metrics(trial, iteration=0, objective=objective,
+                        context={'train_auc': results[0, 0],
+                                 'val_auc': results[1, 0],
+                                 'test_auc': results[2, 0],
+                                 'train_ap': results[0, 1],
+                                 'val_ap': results[1, 1],
+                                 'test_ap': results[2, 1]})
 
 
 @ex.command
