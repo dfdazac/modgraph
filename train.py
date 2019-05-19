@@ -87,8 +87,8 @@ def train(dataset, method, lr, epochs, device_str, link_prediction=False,
 
     add_self_connections = method == 'node2vec'
     pos_split, neg_split = utils.get_data_splits(dataset, neg_sample_mult,
-                                           link_prediction,
-                                           add_self_connections, seed)
+                                                 link_prediction,
+                                                 add_self_connections, seed)
     train_pos, val_pos, test_pos = pos_split
     train_neg, val_neg, test_neg = neg_split
 
@@ -110,6 +110,7 @@ def train(dataset, method, lr, epochs, device_str, link_prediction=False,
         method.to(device)
         optimizer = torch.optim.Adam(method.parameters(), lr=lr)
         best_auc = 0
+        best_epoch = 0
         for epoch in range(1, epochs + 1):
             method.train()
             optimizer.zero_grad()
@@ -132,6 +133,7 @@ def train(dataset, method, lr, epochs, device_str, link_prediction=False,
                 if auc > best_auc:
                     # Keep best model on val set
                     best_auc = auc
+                    best_epoch = epoch
                     torch.save(method.state_dict(), ckpt_path)
 
                 if epoch % 50 == 0:
@@ -151,6 +153,7 @@ def train(dataset, method, lr, epochs, device_str, link_prediction=False,
             torch.save(method.state_dict(), ckpt_path)
 
         # Load best checkpoint
+        print(f'Best AUC obtained at epoch {best_epoch}')
         method.load_state_dict(torch.load(ckpt_path))
         os.remove(ckpt_path)
     elif method == 'node2vec':
@@ -276,9 +279,8 @@ def log_statistics(results, metrics, timestamp, _run):
         _run.log_scalar(f'{metrics[i]} std', std[i])
 
 
-@ex.command
-def modular_search(dataset_str, edge_score, lr, epochs, n_exper, device,
-                   timestamp, _run):
+@ex.capture
+def get_study(timestamp, _run):
     import sherpa
 
     parameters = [sherpa.Choice('encoder_str',
@@ -300,19 +302,24 @@ def modular_search(dataset_str, edge_score, lr, epochs, n_exper, device,
 
     algorithm = sherpa.algorithms.GridSearch()
 
-    output_dir = osp.join('./logs', timestamp)
-    if not osp.isdir(output_dir):
-        os.mkdir(output_dir)
+    if len(_run.observers) > 0:
+        output_dir = osp.join('./logs', timestamp)
+        if not osp.isdir(output_dir):
+            os.mkdir(output_dir)
+    else:
+        output_dir = None
 
     study = sherpa.Study(parameters, algorithm, lower_is_better=False,
                          output_dir=output_dir)
+    return study
+
+
+@ex.command
+def modular_search_link_pred():
+    study = get_study()
 
     for trial in study:
-        results = link_pred_experiments(dataset_str, **trial.parameters,
-                                        edge_score=edge_score, lr=lr,
-                                        epochs=epochs, train_node2vec=False,
-                                        n_exper=n_exper, device=device,
-                                        timestamp=timestamp)
+        results = link_pred_experiments(**trial.parameters)
 
         # Compute mean across experiments,
         # and reshape with one row per split (train/val/test)
@@ -328,7 +335,27 @@ def modular_search(dataset_str, edge_score, lr, epochs, n_exper, device,
                                        'test_ap': results[2, 1]})
         study.finalize(trial)
 
-    study.save()
+    if study.output_dir is not None:
+        study.save()
+
+
+@ex.command
+def modular_search_node_class():
+    study = get_study()
+
+    for trial in study:
+        results = node_class_experiments(**trial.parameters)
+
+        # Compute mean across experiments
+        results = np.mean(results, axis=0)
+        # Objective is test_acc
+        objective = float(results[1])
+        study.add_observation(trial, iteration=0, objective=objective,
+                              context={'train_acc': results[0]})
+        study.finalize(trial)
+
+    if study.output_dir is not None:
+        study.save()
 
 
 @ex.command
@@ -386,8 +413,6 @@ def link_pred_experiments(dataset_str, encoder_str, dimensions, repr_str,
     dataset = utils.get_data(dataset_str, path)
 
     for i in range(n_exper):
-        if i == 16:
-            print('wait')
         print('\nTrial {:d}/{:d}'.format(i + 1, n_exper))
 
         if train_node2vec:
@@ -408,7 +433,7 @@ def link_pred_experiments(dataset_str, encoder_str, dimensions, repr_str,
     return results
 
 
-@ex.automain
+@ex.command
 def node_class_experiments(dataset_str, encoder_str, dimensions, repr_str,
                            loss_str, sampling_str, lr, epochs, train_node2vec,
                            p_labeled, n_exper, device, timestamp, _run):
@@ -444,3 +469,10 @@ def node_class_experiments(dataset_str, encoder_str, dimensions, repr_str,
         results[i] = [train_acc, test_acc]
 
     log_statistics(results, ['train ACC', 'test ACC'])
+
+    return results
+
+
+@ex.automain
+def stub():
+    return
