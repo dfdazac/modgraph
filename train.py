@@ -277,8 +277,8 @@ def log_statistics(results, metrics, timestamp, _run):
 
 
 @ex.command
-def hparam_search(dataset_str, edge_score, lr, epochs, n_exper, device,
-                  timestamp, _run):
+def modular_search(dataset_str, edge_score, lr, epochs, n_exper, device,
+                   timestamp, _run):
     import sherpa
 
     parameters = [sherpa.Choice('encoder_str',
@@ -313,7 +313,11 @@ def hparam_search(dataset_str, edge_score, lr, epochs, n_exper, device,
                                         epochs=epochs, train_node2vec=False,
                                         n_exper=n_exper, device=device,
                                         timestamp=timestamp)
-        results = results.reshape([3, 2])
+
+        # Compute mean across experiments,
+        # and reshape with one row per split (train/val/test)
+        results = np.mean(results, axis=0).reshape([3, 2])
+        # Objective is test_auc + test_ap
         objective = float(np.sum(results[-1]))
         study.add_observation(trial, iteration=0, objective=objective,
                               context={'train_auc': results[0, 0],
@@ -328,7 +332,7 @@ def hparam_search(dataset_str, edge_score, lr, epochs, n_exper, device,
 
 
 @ex.command
-def load_hparam_results(timestamp):
+def load_modular_results(timestamp):
     import sherpa
 
     output_dir = osp.join('./logs', str(timestamp))
@@ -353,7 +357,11 @@ def parallel_trial(dataset_str, edge_score, lr, epochs, n_exper, device,
                                     epochs=epochs, train_node2vec=False,
                                     n_exper=n_exper, device=device,
                                     timestamp=timestamp)
-    results = results.reshape([3, 2])
+
+    # Compute mean across experiments,
+    # and reshape with one row per split (train/val/test)
+    results = np.mean(results, axis=0).reshape([3, 2])
+    # Objective is test_auc + test_ap
     objective = float(np.sum(results[-1]))
     client.send_metrics(trial, iteration=0, objective=objective,
                         context={'train_auc': results[0, 0],
