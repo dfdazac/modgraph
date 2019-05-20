@@ -358,7 +358,6 @@ def modular_search_node_class():
         study.save()
 
 
-@ex.command
 def load_modular_results(timestamp):
     import sherpa
 
@@ -367,8 +366,11 @@ def load_modular_results(timestamp):
     study = sherpa.Study.load_dashboard(output_dir)
 
     wait = ''
-    while wait != 'x':
-        wait = input('Enter x to exit: ')
+    while wait != 'q':
+        wait = input('Enter q to quit: ')
+
+
+load_modular_results = ex.command(load_modular_results, unobserved=True)
 
 
 @ex.command
