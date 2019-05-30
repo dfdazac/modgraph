@@ -1,6 +1,7 @@
 import os.path as osp
 import itertools
-from torch_geometric.datasets import Planetoid, CoraFull, Coauthor, Amazon
+from torch_geometric.datasets import Planetoid
+from .gnnbench import GNNBenchmark
 import numpy as np
 import scipy.sparse as sp
 import torch
@@ -388,18 +389,12 @@ def score_node_classification_sets(features, targets, model_class, device_str,
 
 
 def get_data(dataset_str, path):
+
     if dataset_str in ('cora', 'citeseer', 'pubmed'):
         dataset = Planetoid(path, dataset_str)
-    elif dataset_str == 'corafull':
-        dataset = CoraFull(path)
-    elif dataset_str == 'coauthorcs':
-        dataset = Coauthor(path, name='CS')
-    elif dataset_str == 'coauthorphys':
-        dataset = Coauthor(path, name='Physics')
-    elif dataset_str == 'amazoncomp':
-        dataset = Amazon(path, name='Computers')
-    elif dataset_str == 'amazonphoto':
-        dataset = Amazon(path, name='Photo')
+    elif dataset_str in ('corafull', 'coauthorcs', 'coauthorphys',
+                         'amazoncomp', 'amazonphoto'):
+        dataset = GNNBenchmark(path, dataset_str)
     else:
         raise ValueError(f'Unknown dataset {dataset_str}')
 

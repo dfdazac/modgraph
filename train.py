@@ -241,12 +241,12 @@ def config():
     device (str): one of {'cpu', 'cuda'}
     timestamp (str): unique identifier for a set of experiments
     """
-    dataset_str = 'cora'
+    dataset_str = 'corafull'
 
-    encoder_str = 'gcn'
-    repr_str = 'euclidean_inner'
+    encoder_str = 'sgc'
+    repr_str = 'euclidean_bilinear'
     loss_str = 'bce_loss'
-    sampling_str = 'first_neighbors'
+    sampling_str = 'graph_corruption'
 
     dimensions = [256, 128]
     edge_score = 'inner'
