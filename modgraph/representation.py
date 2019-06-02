@@ -16,10 +16,12 @@ class EuclideanInnerProduct:
         return EuclideanInnerProduct.score(z, pairs)
 
 
-class EuclideanBilinear(nn.Module):
-    """Euclidean representation with a parameterized bilinear product score"""
+class EuclideanInfomax(nn.Module):
+    """Euclidean representation with a parameterized bilinear product score
+    with a summary representation
+    """
     def __init__(self, in_features):
-        super(EuclideanBilinear, self).__init__()
+        super(EuclideanInfomax, self).__init__()
         self.weight = nn.Parameter(torch.Tensor(in_features, in_features))
         glorot(self.weight)
 

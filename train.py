@@ -36,7 +36,7 @@ def build_method(encoder_str, num_features, dimensions, repr_str, loss_str,
     if repr_str == 'euclidean_inner':
         representation = modgraph.EuclideanInnerProduct()
     elif repr_str == 'euclidean_bilinear':
-        representation = modgraph.EuclideanBilinear(in_features=emb_dim)
+        representation = modgraph.EuclideanInfomax(in_features=emb_dim)
     elif repr_str == 'euclidean_distance':
         representation = modgraph.EuclideanDistance()
     elif repr_str == 'gaussian':
@@ -241,7 +241,7 @@ def config():
     device (str): one of {'cpu', 'cuda'}
     timestamp (str): unique identifier for a set of experiments
     """
-    dataset_str = 'corafull'
+    dataset_str = 'cora'
 
     encoder_str = 'sgc'
     repr_str = 'euclidean_bilinear'

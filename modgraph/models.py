@@ -6,7 +6,7 @@ from .node2vec import node2vec
 from gensim.models import Word2Vec
 from .utils import adj_from_edge_index
 
-from .representation import EuclideanInnerProduct, EuclideanBilinear
+from .representation import EuclideanInnerProduct, EuclideanInfomax
 
 
 class EmbeddingMethod(nn.Module):
@@ -23,7 +23,7 @@ class EmbeddingMethod(nn.Module):
         return self.representation.score_link_pred(z, pairs)
 
     def forward(self, x, edge_index, pos_samples, neg_samples):
-        if isinstance(self.representation, EuclideanBilinear):
+        if isinstance(self.representation, EuclideanInfomax):
             pos_samples = self.encoder(x, pos_samples)
             neg_samples = self.encoder(x, neg_samples)
             summary = torch.sigmoid(pos_samples.mean(dim=0))

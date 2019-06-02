@@ -1,5 +1,5 @@
 from .encoder import MLPEncoder, GCNEncoder, SGCEncoder, GCNMLPEncoder
-from .representation import (EuclideanInnerProduct, EuclideanBilinear,
+from .representation import (EuclideanInnerProduct, EuclideanInfomax,
                              EuclideanDistance, Gaussian)
 from .loss import (bce_loss, square_exponential_loss, square_square_loss,
                    hinge_loss)
