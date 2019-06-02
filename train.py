@@ -16,7 +16,7 @@ root = osp.dirname(osp.realpath(__file__))
 def build_method(encoder_str, num_features, dimensions, repr_str, loss_str,
                  sampling_str):
     emb_dim = dimensions[-1]
-    if repr_str == 'gaussian':
+    if repr_str in ['gaussian', 'gaussian_variational']:
         emb_dim = dimensions[-1] * 2
         dimensions = dimensions[:-1] + [emb_dim]
 
@@ -35,12 +35,14 @@ def build_method(encoder_str, num_features, dimensions, repr_str, loss_str,
 
     if repr_str == 'euclidean_inner':
         representation = modgraph.EuclideanInnerProduct()
-    elif repr_str == 'euclidean_bilinear':
+    elif repr_str == 'euclidean_infomax':
         representation = modgraph.EuclideanInfomax(in_features=emb_dim)
     elif repr_str == 'euclidean_distance':
         representation = modgraph.EuclideanDistance()
     elif repr_str == 'gaussian':
         representation = modgraph.Gaussian()
+    elif repr_str == 'gaussian_variational':
+        representation = modgraph.GaussianVariational()
     else:
         raise ValueError(f'Unknown representation {repr_str}')
 
@@ -199,7 +201,8 @@ def train(dataset, method, lr, epochs, device_str, link_prediction=False,
         for (auc_res, ap_res), split in zip(results, ['train', 'val', 'test']):
             print('{:5} - auc: {:.6f} ap: {:.6f}'.format(split, auc_res, ap_res))
 
-    if isinstance(method.representation, modgraph.Gaussian):
+    if isinstance(method.representation,
+                  (modgraph.Gaussian, modgraph.GaussianVariational)):
         # Use the mean for downstream tasks
         emb_dim = embeddings.shape[1] // 2
         mu, logsigma = torch.split(embeddings, emb_dim, dim=1)
@@ -226,7 +229,7 @@ def config():
                         'coauthorcs, 'coauthorphys', 'amazoncomp',
                         'amazonphoto'}
     encoder_str (str): {'mlp', 'gcn', 'gcnmlp'}
-    repr_str (str): {'euclidean_inner', 'euclidean_bilinear', 'gaussian',
+    repr_str (str): {'euclidean_inner', 'euclidean_infomax', 'gaussian',
                      'euclidean_distance'}
     loss_str (str): {'bce_loss', 'square_exponential'}
     sampling_str (str): {'first_neighbors', 'ranked', 'graph_corruption'}
@@ -244,9 +247,9 @@ def config():
     dataset_str = 'cora'
 
     encoder_str = 'sgc'
-    repr_str = 'euclidean_bilinear'
+    repr_str = 'gaussian_variational'
     loss_str = 'bce_loss'
-    sampling_str = 'graph_corruption'
+    sampling_str = 'first_neighbors'
 
     dimensions = [256, 128]
     edge_score = 'inner'
@@ -287,7 +290,7 @@ def get_study(timestamp, _run):
                                 range=['mlp', 'gcn', 'sgc', 'gcnmlp']),
                   sherpa.Choice('repr_str',
                                 range=['euclidean_inner',
-                                       'euclidean_bilinear',
+                                       'euclidean_infomax',
                                        'euclidean_distance',
                                        'gaussian']),
                   sherpa.Choice('loss_str',

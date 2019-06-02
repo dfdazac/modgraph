@@ -33,7 +33,13 @@ class EmbeddingMethod(nn.Module):
 
         pos_score = self.representation.score(z, pos_samples)
         neg_score = self.representation.score(z, neg_samples)
-        return self.loss(pos_score, neg_score)
+
+        loss = self.loss(pos_score, neg_score)
+
+        if hasattr(self.representation, "regularizer"):
+            loss += self.representation.regularizer(z)
+
+        return loss
 
     def __repr__(self):
         repr_str = 'EmbeddingMethod(\n' + \

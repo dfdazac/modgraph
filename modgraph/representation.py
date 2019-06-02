@@ -4,7 +4,17 @@ import torch.nn.functional as F
 from torch_geometric.nn.inits import glorot
 
 
-class EuclideanInnerProduct:
+class Representation:
+    @staticmethod
+    def score(z, pairs):
+        raise NotImplementedError
+
+    @staticmethod
+    def score_link_pred(z, pairs):
+        raise NotImplementedError
+
+
+class EuclideanInnerProduct(Representation):
     """Euclidean representation with an inner product score"""
     @staticmethod
     def score(z, pairs):
@@ -16,12 +26,12 @@ class EuclideanInnerProduct:
         return EuclideanInnerProduct.score(z, pairs)
 
 
-class EuclideanInfomax(nn.Module):
+class EuclideanInfomax(Representation, nn.Module):
     """Euclidean representation with a parameterized bilinear product score
     with a summary representation
     """
     def __init__(self, in_features):
-        super(EuclideanInfomax, self).__init__()
+        nn.Module.__init__(self)
         self.weight = nn.Parameter(torch.Tensor(in_features, in_features))
         glorot(self.weight)
 
@@ -37,7 +47,7 @@ class EuclideanInfomax(nn.Module):
         return EuclideanInnerProduct.score(z, pairs)
 
 
-class EuclideanDistance:
+class EuclideanDistance(Representation):
     """Euclidean representation with an L2 distance score"""
     @staticmethod
     def score(z, pairs):
@@ -66,7 +76,7 @@ class EuclideanDistance:
         return EuclideanDistance.score(z, pairs)
 
 
-class Gaussian:
+class Gaussian(Representation):
     """Gaussian distribution representation with a -KL divergence score"""
     @staticmethod
     def score(z, pairs):
@@ -104,3 +114,27 @@ class Gaussian:
     @staticmethod
     def score_link_pred(z, pairs):
         return Gaussian.score(z, pairs)
+
+
+class GaussianVariational(Representation):
+    @staticmethod
+    def score(z, pairs):
+        # Reparameterization trick
+        emb_dim = z.shape[1] // 2
+        mu, logvar = torch.split(z, emb_dim, dim=1)
+        z = mu + torch.randn_like(mu) * torch.sqrt(torch.exp(logvar))
+
+        return EuclideanInnerProduct.score(z, pairs)
+
+    @staticmethod
+    def score_link_pred(z, pairs):
+        emb_dim = z.shape[1] // 2
+        mu, _ = torch.split(z, emb_dim, dim=1)
+        return EuclideanInnerProduct.score(mu, pairs)
+
+    @staticmethod
+    def regularizer(z):
+        emb_dim = z.shape[1] // 2
+        mu, logvar = torch.split(z, emb_dim, dim=1)
+        kl_div = 0.5 * (torch.exp(logvar) + mu ** 2 - logvar - 1).mean()
+        return kl_div

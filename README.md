@@ -10,6 +10,15 @@ Methods for unsupervised representation learning on graphs can be described in t
 
 By identifying this we can reproduce existing methods:
 
+**Variational Graph Autoencoders** [(Kipf and Welling, 2016)](https://arxiv.org/abs/1611.07308):
+
+```python
+encoder = GCNEncoder(dataset.num_features, hidden_dims=[256, 128])
+representation = GaussianVariational()
+loss = bceloss
+sampling = FirstNeighborSampling
+```
+
 **Graph Autoencoders** [(Kipf and Welling, 2016)](https://arxiv.org/abs/1611.07308):
 
 ```python
