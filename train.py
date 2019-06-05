@@ -295,11 +295,6 @@ def get_study(timestamp, _run):
 
     parameters = [sherpa.Choice('encoder_str',
                                 range=['mlp', 'gcn', 'sgc', 'gcnmlp']),
-                  sherpa.Choice('repr_str',
-                                range=['euclidean_inner',
-                                       'euclidean_infomax',
-                                       'euclidean_distance',
-                                       'gaussian']),
                   sherpa.Choice('loss_str',
                                 range=['bce_loss',
                                        'square_exponential_loss',
