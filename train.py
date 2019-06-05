@@ -13,8 +13,8 @@ import modgraph.utils as utils
 root = osp.dirname(osp.realpath(__file__))
 
 
-def build_method(encoder_str, num_features, dimensions, repr_str, loss_str,
-                 sampling_str):
+def build_method(encoder_str, num_features, dimensions, n_points, repr_str,
+                 loss_str, sampling_str):
     emb_dim = dimensions[-1]
     if repr_str in ['gaussian', 'gaussian_variational']:
         emb_dim = dimensions[-1] * 2
@@ -47,6 +47,8 @@ def build_method(encoder_str, num_features, dimensions, repr_str, loss_str,
         representation = modgraph.GaussianVariational()
     elif repr_str == 'spherical_variational':
         representation = modgraph.HypersphericalVariational()
+    elif repr_str == 'point_cloud':
+        representation = modgraph.PointCloud(n_points)
     else:
         raise ValueError(f'Unknown representation {repr_str}')
 
@@ -250,12 +252,13 @@ def config():
     """
     dataset_str = 'cora'
 
-    encoder_str = 'sgc'
-    repr_str = 'spherical_variational'
-    loss_str = 'bce_loss'
-    sampling_str = 'first_neighbors'
+    encoder_str = 'mlp'
+    repr_str = 'point_cloud'
+    loss_str = 'square_square_loss'
+    sampling_str = 'ranked'
 
-    dimensions = [32, 32]
+    dimensions = [256, 128]
+    n_points = 16
     edge_score = 'inner'
     lr = 0.001
     epochs = 200
@@ -305,7 +308,9 @@ def get_study(timestamp, _run):
                   sherpa.Choice('sampling_str',
                                 range=['first_neighbors',
                                        'graph_corruption',
-                                       'ranked'])]
+                                       'ranked']),
+                  sherpa.Choice('n_points',
+                                range=[1, 4, 8, 16])]
 
     algorithm = sherpa.algorithms.GridSearch()
 
@@ -409,7 +414,7 @@ def parallel_trial(dataset_str, edge_score, lr, epochs, n_exper, device,
 
 
 @ex.command
-def link_pred_experiments(dataset_str, encoder_str, dimensions, repr_str,
+def link_pred_experiments(dataset_str, encoder_str, dimensions, n_points, repr_str,
                           loss_str, sampling_str, edge_score, lr,
                           epochs, train_node2vec, n_exper, device, timestamp,
                           _run):
@@ -428,7 +433,7 @@ def link_pred_experiments(dataset_str, encoder_str, dimensions, repr_str,
             method = 'node2vec'
         else:
             method = build_method(encoder_str, dataset.num_features, dimensions,
-                                  repr_str, loss_str, sampling_str)
+                                  n_points, repr_str, loss_str, sampling_str)
         _, scores = train(dataset, method, lr, epochs,
                           device, link_prediction=True, seed=i,
                           ckpt_name=timestamp, edge_score=edge_score)
@@ -443,7 +448,7 @@ def link_pred_experiments(dataset_str, encoder_str, dimensions, repr_str,
 
 
 @ex.command
-def node_class_experiments(dataset_str, encoder_str, dimensions, repr_str,
+def node_class_experiments(dataset_str, encoder_str, dimensions, n_points, repr_str,
                            loss_str, sampling_str, lr, epochs, train_node2vec,
                            p_labeled, n_exper, device, timestamp, _run):
     torch.random.manual_seed(0)
@@ -461,7 +466,7 @@ def node_class_experiments(dataset_str, encoder_str, dimensions, repr_str,
             method = 'node2vec'
         else:
             method = build_method(encoder_str, dataset.num_features, dimensions,
-                                  repr_str, loss_str, sampling_str)
+                                  n_points, repr_str, loss_str, sampling_str)
         embeddings, _ = train(dataset, method, lr, epochs,
                               device, seed=i, ckpt_name=timestamp)
 
