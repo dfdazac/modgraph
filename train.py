@@ -18,7 +18,9 @@ def build_method(encoder_str, num_features, dimensions, repr_str, loss_str,
     emb_dim = dimensions[-1]
     if repr_str in ['gaussian', 'gaussian_variational']:
         emb_dim = dimensions[-1] * 2
-        dimensions = dimensions[:-1] + [emb_dim]
+    elif repr_str == 'spherical_variational':
+        emb_dim = dimensions[-1] + 1
+    dimensions = dimensions[:-1] + [emb_dim]
 
     if encoder_str == 'mlp':
         encoder_class = modgraph.MLPEncoder
@@ -43,6 +45,8 @@ def build_method(encoder_str, num_features, dimensions, repr_str, loss_str,
         representation = modgraph.Gaussian()
     elif repr_str == 'gaussian_variational':
         representation = modgraph.GaussianVariational()
+    elif repr_str == 'spherical_variational':
+        representation = modgraph.HypersphericalVariational()
     else:
         raise ValueError(f'Unknown representation {repr_str}')
 
@@ -247,11 +251,11 @@ def config():
     dataset_str = 'cora'
 
     encoder_str = 'sgc'
-    repr_str = 'gaussian_variational'
+    repr_str = 'spherical_variational'
     loss_str = 'bce_loss'
     sampling_str = 'first_neighbors'
 
-    dimensions = [256, 128]
+    dimensions = [32, 32]
     edge_score = 'inner'
     lr = 0.001
     epochs = 200

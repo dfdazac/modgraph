@@ -9,7 +9,7 @@ from sklearn.manifold import TSNE
 import networkx as nx
 
 from train import train
-from utils import get_data, adj_from_edge_index
+from modgraph.utils import get_data, adj_from_edge_index
 
 rcParams['font.family'] = 'sans-serif'
 rcParams['font.sans-serif'] = ['Helvetica Neue']

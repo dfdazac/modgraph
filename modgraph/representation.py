@@ -3,6 +3,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch_geometric.nn.inits import glorot
 
+from .sgae.von_mises_fisher import VonMisesFisher
+from .sgae.hyperspherical_uniform import HypersphericalUniform
+
 
 class Representation:
     @staticmethod
@@ -137,4 +140,36 @@ class GaussianVariational(Representation):
         emb_dim = z.shape[1] // 2
         mu, logvar = torch.split(z, emb_dim, dim=1)
         kl_div = 0.5 * (torch.exp(logvar) + mu ** 2 - logvar - 1).mean()
+        return kl_div
+
+
+class HypersphericalVariational(Representation):
+    def __init__(self):
+        self.uniform = HypersphericalUniform(dim=128, device='cuda')
+
+    @staticmethod
+    def score(z, pairs):
+        emb_dim = z.shape[1] - 1
+        z_mean, z_var = torch.split(z, emb_dim, dim=1)
+        z_mean = z_mean / z_mean.norm(dim=-1, keepdim=True)
+        z_var = F.softplus(z_var) + 1
+        q_z = VonMisesFisher(z_mean, z_var)
+        z = q_z.rsample()
+
+        return EuclideanInnerProduct.score(z, pairs)
+
+    @staticmethod
+    def score_link_pred(z, pairs):
+        emb_dim = z.shape[1] - 1
+        z_mean, _ = torch.split(z, emb_dim, dim=1)
+        z_mean = z_mean / z_mean.norm(dim=-1, keepdim=True)
+        return EuclideanInnerProduct.score(z_mean, pairs)
+
+    def regularizer(self, z):
+        emb_dim = z.shape[1] - 1
+        z_mean, z_var = torch.split(z, emb_dim, dim=1)
+        z_mean = z_mean / z_mean.norm(dim=-1, keepdim=True)
+        z_var = F.softplus(z_var) + 1
+        q_z = VonMisesFisher(z_mean, z_var)
+        kl_div = torch.distributions.kl.kl_divergence(q_z, self.uniform).mean()
         return kl_div
