@@ -84,7 +84,7 @@ def train(dataset, method, lr, epochs, device_str, link_prediction=False,
     # Load and split data
     neg_sample_mult = 1
     resample_neg = False
-    if not link_prediction and method != 'node2vec':
+    if method != 'node2vec':
         if method.sampling_class == modgraph.FirstNeighborSampling:
             neg_sample_mult = 10
             resample_neg = True
@@ -248,12 +248,12 @@ def config():
     device (str): one of {'cpu', 'cuda'}
     timestamp (str): unique identifier for a set of experiments
     """
-    dataset_str = 'cora'
+    dataset_str = 'citeseer'
 
     encoder_str = 'sgc'
     repr_str = 'euclidean_inner'
     loss_str = 'hinge_loss'
-    sampling_str = 'graph_corruption'
+    sampling_str = 'first_neighbors'
 
     dimensions = [256, 128]
     edge_score = 'inner'

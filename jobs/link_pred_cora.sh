@@ -3,7 +3,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=6
 #SBATCH --ntasks-per-node=1
-#SBATCH --time=00:15:00
+#SBATCH --time=01:00:00
 #SBATCH --mem=60000M
 #SBATCH --partition=gpu_shared
 #SBATCH --gres=gpu:1
@@ -17,7 +17,7 @@ cd $TMPDIR/$PROJ_FOLDER
 # Run experiment
 source activate pygeom
 srun python -u train.py link_pred_experiments with \
-dataset_str="corafull" \
+dataset_str="amazoncomp" \
 encoder_str="sgc" \
 repr_str="euclidean_inner" \
 loss_str="hinge_loss" \
