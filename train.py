@@ -250,19 +250,19 @@ def config():
     """
     dataset_str = 'cora'
 
-    encoder_str = 'sgc'
-    repr_str = 'spherical_variational'
-    loss_str = 'bce_loss'
-    sampling_str = 'first_neighbors'
+    encoder_str = 'gcn'
+    repr_str = 'euclidean_inner'
+    loss_str = 'hinge_loss'
+    sampling_str = 'graph_corruption'
 
-    dimensions = [32, 32]
+    dimensions = [256, 128]
     edge_score = 'inner'
     lr = 0.001
     epochs = 200
     train_node2vec = False
     p_labeled = 0.1
     n_exper = 20
-    device = 'cuda'
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
     timestamp = str(int(datetime.now().timestamp()))
 
 
@@ -305,10 +305,13 @@ def get_study(timestamp, _run):
                   sherpa.Choice('sampling_str',
                                 range=['first_neighbors',
                                        'graph_corruption',
-                                       'ranked'])]
+                                       'ranked']),
+                  sherpa.Choice('lr',
+                                range=[1e-4, 1e-3, 1e-2])]
 
     algorithm = sherpa.algorithms.GridSearch()
 
+    # If Sacred is run with no observers, don't log with sherpa either
     if len(_run.observers) > 0:
         output_dir = osp.join('./logs', timestamp)
         if not osp.isdir(output_dir):
