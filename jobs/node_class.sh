@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=link_pred
+#SBATCH --job-name=node_class
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=6
 #SBATCH --ntasks-per-node=1
@@ -16,7 +16,7 @@ cd $TMPDIR/$PROJ_FOLDER
 
 # Run experiment
 source activate pygeom
-srun python -u train.py link_pred_experiments with \
+srun python -u train.py node_class_experiments with \
 dataset_str="corafull" \
 encoder_str="sgc" \
 repr_str="euclidean_inner" \

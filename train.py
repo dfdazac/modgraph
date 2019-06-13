@@ -250,7 +250,7 @@ def config():
     """
     dataset_str = 'cora'
 
-    encoder_str = 'gcn'
+    encoder_str = 'sgc'
     repr_str = 'euclidean_inner'
     loss_str = 'hinge_loss'
     sampling_str = 'graph_corruption'
