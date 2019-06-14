@@ -254,7 +254,7 @@ def load_npz_to_sparse_graph(file_name):
         Graph in sparse matrix format.
 
     """
-    with np.load(file_name) as loader:
+    with np.load(file_name, allow_pickle=True) as loader:
         loader = dict(loader)
         adj_matrix = sp.csr_matrix((loader['adj_data'],
                                     loader['adj_indices'],

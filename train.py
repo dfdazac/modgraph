@@ -86,7 +86,7 @@ def train(dataset, method, lr, epochs, device_str, link_prediction=False,
     # Load and split data
     neg_sample_mult = 1
     resample_neg = False
-    if not link_prediction and method != 'node2vec':
+    if method != 'node2vec':
         if method.sampling_class == modgraph.FirstNeighborSampling:
             neg_sample_mult = 10
             resample_neg = True
@@ -250,7 +250,7 @@ def config():
     device (str): one of {'cpu', 'cuda'}
     timestamp (str): unique identifier for a set of experiments
     """
-    dataset_str = 'cora'
+    dataset_str = 'citeseer'
 
     encoder_str = 'mlp'
     repr_str = 'point_cloud'
@@ -265,7 +265,7 @@ def config():
     train_node2vec = False
     p_labeled = 0.1
     n_exper = 20
-    device = 'cuda'
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
     timestamp = str(int(datetime.now().timestamp()))
 
 
@@ -309,6 +309,7 @@ def get_study(timestamp, _run):
 
     algorithm = sherpa.algorithms.GridSearch()
 
+    # If Sacred is run with no observers, don't log with sherpa either
     if len(_run.observers) > 0:
         output_dir = osp.join('./logs', timestamp)
         if not osp.isdir(output_dir):
