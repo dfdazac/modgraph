@@ -17,8 +17,10 @@ def build_method(encoder_str, num_features, dimensions, n_points, repr_str,
                  loss_str, sampling_str):
     emb_dim = dimensions[-1]
     if repr_str in ['gaussian', 'gaussian_variational']:
+        # Meand and variance
         emb_dim = dimensions[-1] * 2
     elif repr_str == 'spherical_variational':
+        # Mean and concentration
         emb_dim = dimensions[-1] + 1
     dimensions = dimensions[:-1] + [emb_dim]
 
@@ -250,15 +252,15 @@ def config():
     device (str): one of {'cpu', 'cuda'}
     timestamp (str): unique identifier for a set of experiments
     """
-    dataset_str = 'citeseer'
+    dataset_str = 'cora'
 
     encoder_str = 'mlp'
-    repr_str = 'point_cloud'
-    loss_str = 'square_square_loss'
-    sampling_str = 'ranked'
+    repr_str = 'gaussian_variational'
+    loss_str = 'hinge_loss'
+    sampling_str = 'first_neighbors'
 
     dimensions = [256, 128]
-    n_points = 16
+    n_points = 1
     edge_score = 'inner'
     lr = 0.001
     epochs = 200
