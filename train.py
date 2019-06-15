@@ -6,6 +6,9 @@ import torch
 import numpy as np
 from sacred import Experiment
 from sacred.observers import MongoObserver
+import matplotlib.pyplot as plt
+from sklearn.decomposition import PCA
+from sklearn.manifold import TSNE
 
 import modgraph
 import modgraph.utils as utils
@@ -70,6 +73,68 @@ def build_method(encoder_str, num_features, dimensions, n_points, repr_str,
     return modgraph.EmbeddingMethod(encoder, representation, loss, sampling_class)
 
 
+def save_cloud_visualization(method, embeddings, vis_pos, vis_neg, epoch):
+    num_samples = embeddings.shape[0]
+    if hasattr(method.representation, 'n_points'):
+        num_points = method.representation.n_points
+    else:
+        num_points = 1
+
+    emb_dim = embeddings.shape[1] // num_points
+    points = embeddings.reshape(num_samples, num_points, -1).numpy()
+
+    means = points.mean(axis=1, keepdims=True)
+    distances = np.sqrt(np.sum((points - means) ** 2, axis=-1))
+    distances = distances.mean()
+
+    cloud_mean = points.reshape(-1, emb_dim).mean(axis=0, keepdims=True)
+    cloud_dists = np.sqrt(np.sum((points.reshape(-1, emb_dim) - cloud_mean)**2,
+                                 axis=-1))
+    cloud_dists = cloud_dists.mean()
+
+    print(f'Epoch {epoch:d}')
+    print(f'Mean cloud variance: {distances:.6f}')
+    print(f'Total variance: {cloud_dists:.6f}')
+
+    node_idx = np.unique(np.concatenate((vis_pos, vis_neg), axis=1))
+    idx_to_pos = {idx: pos for pos, idx in enumerate(node_idx)}
+    points = points[node_idx]
+    if emb_dim > 2:
+        if emb_dim > 64:
+            reducer = TSNE(n_components=2, init='pca', random_state=0)
+        else:
+            reducer = PCA(n_components=2)
+
+        points = reducer.fit_transform(points.reshape(-1, emb_dim))
+    else:
+        points = points.reshape(-1, 2)
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(8, 4))
+    ax1.scatter(points[:, 0], points[:, 1], color='lightgray')
+    ax2.scatter(points[:, 0], points[:, 1], color='lightgray')
+
+    points = points.reshape(-1, num_points, 2)
+    colors = ['r', 'g', 'dodgerblue']
+    titles = ('Positive pairs', 'Negative pairs')
+
+    for ax, vis, title in zip((ax1, ax2), (vis_pos, vis_neg), titles):
+        for i, color in enumerate(colors):
+            cloud_a_idx = idx_to_pos[vis[0, i]]
+            cloud_a = points[cloud_a_idx]
+            ax.scatter(cloud_a[:, 0], cloud_a[:, 1], s=60, color=color,
+                       marker='o', edgecolors='k')
+
+            cloud_a_idx = idx_to_pos[vis[1, i]]
+            cloud_a = points[cloud_a_idx]
+            ax.scatter(cloud_a[:, 0], cloud_a[:, 1], s=60, color=color,
+                       marker='X', edgecolors='k')
+
+        ax.set_axis_on()
+        ax.set_title(title)
+
+    fig.savefig(f'cloud_{epoch:d}')
+
+
 def train(dataset, method, lr, epochs, device_str, link_prediction=False,
           seed=0, ckpt_name='model', edge_score='inner'):
     if edge_score == 'inner':
@@ -121,11 +186,27 @@ def train(dataset, method, lr, epochs, device_str, link_prediction=False,
         optimizer = torch.optim.Adam(method.parameters(), lr=lr)
         best_auc = 0
         best_epoch = 0
+
+        # Sample positive and negative pairs for visualization
+        num_samples = 100
+        sample_idx = np.random.choice(range(train_pos.shape[1]), num_samples,
+                                      replace=False)
+        vis_pos = train_pos[:, sample_idx].numpy()
+        vis_neg = train_neg[:, sample_idx].numpy()
         for epoch in range(1, epochs + 1):
+            if epoch in [1, 5, 10, 20, 50, 100, 200, epochs]:
+                with torch.no_grad():
+                    embeddings = method.encoder(x, edge_index).detach().cpu()
+                    save_cloud_visualization(method, embeddings,
+                                             vis_pos, vis_neg, epoch)
+
             method.train()
             optimizer.zero_grad()
 
             pos_samples, neg_samples = next(train_iter)
+            # Use these to test that we can overfit:
+            # pos_samples = torch.tensor(vis_pos, dtype=torch.long)
+            # neg_samples = torch.tensor(vis_neg, dtype=torch.long)
             pos_samples = pos_samples.to(device)
             neg_samples = neg_samples.to(device)
             loss = method(x, edge_index, pos_samples, neg_samples)
@@ -255,11 +336,11 @@ def config():
     dataset_str = 'cora'
 
     encoder_str = 'mlp'
-    repr_str = 'gaussian_variational'
+    repr_str = 'point_cloud'
     loss_str = 'hinge_loss'
     sampling_str = 'first_neighbors'
 
-    dimensions = [256, 128]
+    dimensions = [256, 32]
     n_points = 1
     edge_score = 'inner'
     lr = 0.001
@@ -296,7 +377,7 @@ def get_study(timestamp, _run):
     import sherpa
 
     parameters = [sherpa.Choice('encoder_str',
-                                range=['mlp', 'gcn', 'sgc', 'gcnmlp']),
+                                range=['mlp', 'gcn', 'sgc']),
                   sherpa.Choice('loss_str',
                                 range=['bce_loss',
                                        'square_exponential_loss',
@@ -304,7 +385,6 @@ def get_study(timestamp, _run):
                                        'hinge_loss']),
                   sherpa.Choice('sampling_str',
                                 range=['first_neighbors',
-                                       'graph_corruption',
                                        'ranked']),
                   sherpa.Choice('n_points',
                                 range=[1, 4, 8, 16])]
