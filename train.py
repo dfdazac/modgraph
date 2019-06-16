@@ -194,11 +194,11 @@ def train(dataset, method, lr, epochs, device_str, link_prediction=False,
         vis_pos = train_pos[:, sample_idx].numpy()
         vis_neg = train_neg[:, sample_idx].numpy()
         for epoch in range(1, epochs + 1):
-            if epoch in [1, 5, 10, 20, 50, 100, 200, epochs]:
-                with torch.no_grad():
-                    embeddings = method.encoder(x, edge_index).detach().cpu()
-                    save_cloud_visualization(method, embeddings,
-                                             vis_pos, vis_neg, epoch)
+            # if epoch in [1, 5, 10, 20, 50, 100, 200, epochs]:
+            #     with torch.no_grad():
+            #         embeddings = method.encoder(x, edge_index).detach().cpu()
+            #         save_cloud_visualization(method, embeddings,
+            #                                  vis_pos, vis_neg, epoch)
 
             method.train()
             optimizer.zero_grad()
@@ -333,15 +333,15 @@ def config():
     device (str): one of {'cpu', 'cuda'}
     timestamp (str): unique identifier for a set of experiments
     """
-    dataset_str = 'cora'
+    dataset_str = 'coauthorphys'
 
-    encoder_str = 'mlp'
-    repr_str = 'point_cloud'
-    loss_str = 'hinge_loss'
+    encoder_str = 'sgc'
+    repr_str = 'euclidean_inner'
+    loss_str = 'bce_loss'
     sampling_str = 'first_neighbors'
 
-    dimensions = [256, 32]
-    n_points = 1
+    dimensions = [256, 128]
+    n_points = 4
     edge_score = 'inner'
     lr = 0.001
     epochs = 200

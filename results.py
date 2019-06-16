@@ -1,8 +1,9 @@
 import os
+import os.path as osp
 from collections import OrderedDict
 
 from pymongo import MongoClient
-from matplotlib import rcParams
+# from matplotlib import rcParams
 import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.manifold import TSNE
@@ -11,8 +12,8 @@ import networkx as nx
 from train import train
 from modgraph.utils import get_data, adj_from_edge_index
 
-rcParams['font.family'] = 'sans-serif'
-rcParams['font.sans-serif'] = ['Helvetica Neue']
+# rcParams['font.family'] = 'sans-serif'
+# rcParams['font.sans-serif'] = ['Helvetica Neue']
 
 
 def get_database():
@@ -255,6 +256,24 @@ def sge_curve(dataset_str):
     fig.savefig('sge_{:d}_1e-2_{}'.format(emb_dim, dataset_str))
 
 
-train_save_embeddings('sge', 'cora')
-plot_sge_embeddings('cora')
+def get_graph_assortativity(dataset_str):
+    path = osp.join('data', dataset_str)
+    data = get_data(dataset_str, path)
+    adj = adj_from_edge_index(data.edge_index)
+    graph = nx.from_scipy_sparse_matrix(adj)
 
+    # Add node attributes
+    for i, label in enumerate(data.y):
+        graph.nodes[i]['class'] = label.item()
+
+    deg_assort = nx.degree_assortativity_coefficient(graph)  # , 'class')
+    attr_assor = nx.attribute_assortativity_coefficient(graph, 'class')
+
+    print(f'Graph: {dataset_str}')
+    print(f'Degree assortativity: {deg_assort:.6f}')
+    print(f'Attribute assortativity: {attr_assor:.6f}')
+
+
+for dataset_str in ['cora', 'citeseer', 'pubmed', 'corafull',
+                    'coauthorcs', 'coauthorphys', 'amazoncomp', 'amazonphoto']:
+    get_graph_assortativity(dataset_str)
