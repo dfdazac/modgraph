@@ -14,6 +14,14 @@ import modgraph
 import modgraph.utils as utils
 
 root = osp.dirname(osp.realpath(__file__))
+ex = Experiment()
+# Set up database logs
+uri = os.environ.get('MLAB_URI')
+database = os.environ.get('MLAB_DB')
+if all([uri, database]):
+    ex.observers.append(MongoObserver.create(uri, database))
+else:
+    print('Running without Sacred observers')
 
 
 def build_method(encoder_str, num_features, dimensions, n_points, repr_str,
@@ -67,6 +75,8 @@ def build_method(encoder_str, num_features, dimensions, n_points, repr_str,
         sampling_class = modgraph.GraphCorruptionSampling
     elif sampling_str == 'ranked':
         sampling_class = modgraph.RankedSampling
+    elif sampling_str == 'shortest_path':
+        sampling_class = modgraph.ShortestPathSampling
     else:
         raise ValueError(f'Unknown sampling {sampling_str}')
 
@@ -135,8 +145,9 @@ def save_cloud_visualization(method, embeddings, vis_pos, vis_neg, epoch):
     fig.savefig(f'cloud_{epoch:d}')
 
 
-def train(dataset, method, lr, epochs, device_str, link_prediction=False,
-          seed=0, ckpt_name='model', edge_score='inner'):
+@ex.capture
+def train(dataset, method, lr, epochs, device_str, _run, link_prediction=False,
+          seed=0, ckpt_name='model', edge_score='inner', plot_loss=False):
     if edge_score == 'inner':
         edge_score_class = None
     elif edge_score == 'bilinear':
@@ -188,11 +199,11 @@ def train(dataset, method, lr, epochs, device_str, link_prediction=False,
         best_epoch = 0
 
         # Sample positive and negative pairs for visualization
-        num_samples = 100
-        sample_idx = np.random.choice(range(train_pos.shape[1]), num_samples,
-                                      replace=False)
-        vis_pos = train_pos[:, sample_idx].numpy()
-        vis_neg = train_neg[:, sample_idx].numpy()
+        # num_samples = 100
+        # sample_idx = np.random.choice(range(train_pos.shape[1]), num_samples,
+        #                               replace=False)
+        # vis_pos = train_pos[:, sample_idx].numpy()
+        # vis_neg = train_neg[:, sample_idx].numpy()
         for epoch in range(1, epochs + 1):
             # if epoch in [1, 5, 10, 20, 50, 100, 200, epochs]:
             #     with torch.no_grad():
@@ -213,6 +224,9 @@ def train(dataset, method, lr, epochs, device_str, link_prediction=False,
             loss.backward()
             optimizer.step()
 
+            if plot_loss:
+                _run.log_scalar('loss', loss.item(), epoch)
+
             if link_prediction or method.sampling_class == modgraph.FirstNeighborSampling:
                 # Evaluate on val edges
                 with torch.no_grad():
@@ -227,14 +241,14 @@ def train(dataset, method, lr, epochs, device_str, link_prediction=False,
                     best_epoch = epoch
                     torch.save(method.state_dict(), ckpt_path)
 
-                if epoch % 50 == 0:
+                if epoch % 20 == 0:
                     time = datetime.now().strftime("%Y-%m-%d %H:%M")
                     log = ('[{}] [{:03d}/{:03d}] train loss: {:.6f}, '
                            'val_auc: {:6f}, val_ap: {:6f}')
                     print(log.format(time, epoch, epochs, loss.item(),
                                      auc, ap))
 
-            elif epoch % 50 == 0:
+            elif epoch % 20 == 0:
                 time = datetime.now().strftime("%Y-%m-%d %H:%M")
                 log = '[{}] [{:03d}/{:03d}] train loss: {:.6f}'
                 print(log.format(time, epoch, epochs, loss.item()))
@@ -300,16 +314,6 @@ def train(dataset, method, lr, epochs, device_str, link_prediction=False,
     return embeddings, results
 
 
-ex = Experiment()
-# Set up database logs
-uri = os.environ.get('MLAB_URI')
-database = os.environ.get('MLAB_DB')
-if all([uri, database]):
-    ex.observers.append(MongoObserver.create(uri, database))
-else:
-    print('Running without Sacred observers')
-
-
 # noinspection PyUnusedLocal
 @ex.config
 def config():
@@ -333,21 +337,23 @@ def config():
     device (str): one of {'cpu', 'cuda'}
     timestamp (str): unique identifier for a set of experiments
     """
-    dataset_str = 'coauthorphys'
+    dataset_str = 'cora'
 
-    encoder_str = 'sgc'
-    repr_str = 'euclidean_inner'
+    encoder_str = 'mlp'
+    repr_str = 'point_cloud'
     loss_str = 'bce_loss'
-    sampling_str = 'first_neighbors'
+    sampling_str = 'shortest_path'
 
     dimensions = [256, 128]
-    n_points = 4
+    n_points = 1
     edge_score = 'inner'
-    lr = 0.001
-    epochs = 200
+    classifier = 'set'
+    lr = 0.01
+    epochs = 1000
     train_node2vec = False
     p_labeled = 0.1
     n_exper = 20
+    plot_loss = False
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     timestamp = str(int(datetime.now().timestamp()))
 
@@ -526,8 +532,8 @@ def link_pred_experiments(dataset_str, encoder_str, dimensions, n_points, repr_s
 
 
 @ex.command
-def node_class_experiments(dataset_str, encoder_str, dimensions, n_points, repr_str,
-                           loss_str, sampling_str, lr, epochs, train_node2vec,
+def node_class_experiments(dataset_str, encoder_str, repr_str, loss_str, sampling_str,
+                           dimensions, n_points, classifier, lr, epochs, train_node2vec,
                            p_labeled, n_exper, device, timestamp, _run):
     torch.random.manual_seed(0)
     np.random.seed(0)
@@ -551,10 +557,19 @@ def node_class_experiments(dataset_str, encoder_str, dimensions, n_points, repr_
         embeddings = embeddings.numpy()
         labels = dataset.y.cpu().numpy()
 
-        train_acc, test_acc = utils.score_node_classification(embeddings,
-                                                              labels,
-                                                              p_labeled,
-                                                              seed=i)
+        if isinstance(method.representation, modgraph.PointCloud) \
+                and classifier == 'set':
+            embeddings = embeddings.reshape(dataset.num_nodes, n_points, -1)
+
+            scores = utils.score_node_classification_sets(embeddings, labels,
+                                                          modgraph.DeepSetClassifier,
+                                                          device, p_labeled,
+                                                          seed=i)
+        else:
+            scores = utils.score_node_classification(embeddings, labels,
+                                                     p_labeled, seed=i)
+
+        train_acc, test_acc = scores
 
         print('train - acc: {:.6f}'.format(train_acc))
         print('test  - acc: {:.6f}'.format(test_acc))

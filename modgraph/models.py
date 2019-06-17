@@ -7,6 +7,7 @@ from gensim.models import Word2Vec
 from .utils import adj_from_edge_index
 
 from .representation import EuclideanInnerProduct, EuclideanInfomax
+from .sampling import ShortestPathSampling
 
 
 class EmbeddingMethod(nn.Module):
@@ -32,12 +33,18 @@ class EmbeddingMethod(nn.Module):
             z = self.encoder(x, edge_index)
 
         pos_score = self.representation.score(z, pos_samples)
-        neg_score = self.representation.score(z, neg_samples)
 
-        loss = self.loss(pos_score, neg_score)
+        if self.sampling_class == ShortestPathSampling:
+            sinkhorn_dist = -pos_score
+            graph_dist = neg_samples
+            distortion = torch.abs(sinkhorn_dist - graph_dist) / graph_dist
+            loss = torch.mean(distortion)
+        else:
+            neg_score = self.representation.score(z, neg_samples)
+            loss = self.loss(pos_score, neg_score)
 
-        if hasattr(self.representation, "regularizer"):
-            loss += self.representation.regularizer(z)
+            if hasattr(self.representation, "regularizer"):
+                loss += self.representation.regularizer(z)
 
         return loss
 
@@ -115,7 +122,7 @@ class BilinearScore(nn.Module):
 
 
 class DeepSetClassifier(nn.Module):
-    def __init__(self, in_features, n_classes, drop1, drop2):
+    def __init__(self, in_features, n_classes, drop1=0, drop2=0):
         super(DeepSetClassifier, self).__init__()
 
         self.mlp = nn.Sequential(nn.Linear(in_features, in_features),
