@@ -3,34 +3,62 @@ import os.path as osp
 from collections import OrderedDict
 
 from pymongo import MongoClient
-# from matplotlib import rcParams
+from matplotlib import rc, rcParams
 import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.manifold import TSNE
 import networkx as nx
+from scipy.ndimage.filters import gaussian_filter1d
+from incense import ExperimentLoader
 
-from train import train
 from modgraph.utils import get_data, adj_from_edge_index
 
 # rcParams['font.family'] = 'sans-serif'
 # rcParams['font.sans-serif'] = ['Helvetica Neue']
 
+rcParams.update({'font.size': 11})
+rc('text', usetex=True)
+plt.rc('font', family='serif')
 
-def get_database():
-    """Get a MongoDB database using credentials in environment variables """
+rcParams['axes.axisbelow'] = True
+
+datasets_names = OrderedDict({'amazonphoto': 'Amazon Photo',
+                              'amazoncomp': 'Amazon Computer',
+                              'coauthorphys': 'Coauthor Physics',
+                              'coauthorcs': 'Coauthor CS',
+                              'corafull': 'Cora Full',
+                              'pubmed': 'Pubmed',
+                              'citeseer': 'Citeseer',
+                              'cora': 'Cora'})
+
+
+def get_uri_db_pair():
     uri = os.environ.get('MLAB_URI')
     database = os.environ.get('MLAB_DB')
     if all([uri, database]):
-        return MongoClient(uri)[database]
+        return uri, database
     else:
-        raise ConnectionError('Check database environment variables')
+        raise ConnectionError('Could not find URI or database')
+
+
+def get_experiment(exp_id):
+    uri, database = get_uri_db_pair()
+    loader = ExperimentLoader(mongo_uri=uri, db_name=database)
+    ex = loader.find_by_id(exp_id)
+    return ex
+
+
+def get_database():
+    """Get a MongoDB database using credentials in environment variables """
+    uri, database = get_uri_db_pair()
+    return MongoClient(uri)[database]
 
 
 def get_label_rate_results(database, model_name, timestamp, dataset):
     """Get accuracy results for a given model, with different label rates.
 
     Args:
-        client (MongoClient): to connect with the database
+        database
         model_name (str): name of the dataset
         timestamp (int): timestamp of the experiments
         dataset (str): name of the dataset to get results for
@@ -119,31 +147,26 @@ def make_plots():
 
 
 def dataset_boxplots():
-    datasets = OrderedDict({'amazonphoto': 'Amazon Photo',
-                            'amazoncomp': 'Amazon Computer',
-                            'coauthorphys': 'Coauthor Physics',
-                            'coauthorcs': 'Coauthor CS',
-                            'corafull': 'Cora Full',
-                            'pubmed': 'Pubmed',
-                            'citeseer': 'Citeseer',
-                            'cora': 'Cora'})
     X = []
-    for dataset in datasets:
-        data = get_data(dataset)
+    for dataset in datasets_names:
+        path = osp.join('data', dataset)
+        data = get_data(dataset, path)
         adj = adj_from_edge_index(data.edge_index)
         degrees = np.array(adj.sum(axis=0)).squeeze()
         X.append(degrees)
 
     plt.figure(figsize=(4, 3))
     plt.boxplot(X, showfliers=False, vert=False)
-    plt.xlim([0, 95])
-    plt.yticks([i+1 for i in range(len(datasets))], datasets.values())
+    plt.xlim([0, 92])
+    plt.yticks([i+1 for i in range(len(datasets_names))], datasets_names.values())
     plt.xlabel('Node degree')
     plt.tight_layout()
-    plt.show()
+    plt.show(block=False)
 
 
 def train_save_embeddings(method, dataset_str):
+    from train import train
+
     n_points = 4
     emb_dim = 2
     hidden_dims = [256, emb_dim * n_points]
@@ -215,6 +238,8 @@ def plot_adjacency(method, dataset_str):
 
 
 def sge_curve(dataset_str):
+    from train import train
+
     max_total_dims = 30
     fig, ax = plt.subplots()
 
@@ -266,14 +291,111 @@ def get_graph_assortativity(dataset_str):
     for i, label in enumerate(data.y):
         graph.nodes[i]['class'] = label.item()
 
-    deg_assort = nx.degree_assortativity_coefficient(graph)  # , 'class')
+    deg_assort = nx.degree_assortativity_coefficient(graph)
     attr_assor = nx.attribute_assortativity_coefficient(graph, 'class')
 
     print(f'Graph: {dataset_str}')
     print(f'Degree assortativity: {deg_assort:.6f}')
     print(f'Attribute assortativity: {attr_assor:.6f}')
 
+    return deg_assort, attr_assor
 
-for dataset_str in ['cora', 'citeseer', 'pubmed', 'corafull',
-                    'coauthorcs', 'coauthorphys', 'amazoncomp', 'amazonphoto']:
-    get_graph_assortativity(dataset_str)
+
+def plot_losses():
+    size = (2.5, 2.5)
+
+    # BCE loss
+    s = np.linspace(0.01, 0.99, num=100)
+    plt.figure(figsize=size)
+    plt.plot(s, -np.log(s), 'k', label=r'$\mathcal{L}(S)$')
+    plt.plot(s, -np.log(1-s), 'k--', label=r'$\mathcal{L}(\tilde{S})$')
+    plt.tight_layout()
+    #plt.legend(loc='upper right')
+
+    # Square-exponential loss
+    s = np.linspace(-2, 2, num=100)
+    plt.figure(figsize=size)
+    plt.plot(s, s**2, 'k',  label=r'$\mathcal{L}(S)$')
+    plt.plot(s, np.exp(-s), 'k--',  label=r'$\mathcal{L}(\tilde{S})$')
+    plt.tight_layout()
+    #plt.legend(loc='upper right')
+
+    # Hinge loss
+    plt.figure(figsize=size)
+    loss = 1 + s
+    loss[loss < 0] = 0.0
+    plt.plot(s, loss,  'k', label=r'$\mathcal{L}(S - \tilde{S})$')
+    plt.tight_layout()
+    #plt.legend(loc='upper right')
+
+    # Square-square loss
+    plt.figure(figsize=size)
+    neg_loss = 1 - s
+    neg_loss[neg_loss < 0] = 0.0
+    plt.plot(s, s**2, label=r'$\mathcal{L}(S)$')
+    plt.plot(s, neg_loss**2, '--',  label=r'$\mathcal{L}(\tilde{S})$')
+    plt.tight_layout()
+    #plt.legend(loc='upper right')
+
+    plt.show()
+
+
+def plot_distortions(ids):
+    plt.figure(figsize=(3.2, 2.5))
+    for exp_id in ids:
+        exp = get_experiment(exp_id)
+        n_points = exp.config['n_points']
+        distortion = exp.metrics['loss']
+        dist_smooth = gaussian_filter1d(distortion, sigma=4)
+        plt.plot(dist_smooth, label='$n = {:d}$'.format(n_points))
+
+    plt.xlabel('Epochs')
+    plt.ylabel('Loss')
+    # plt.ylim([0.13, 0.25])
+    plt.ylim([0.227, 0.35])
+    plt.legend(loc='upper right')
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_assortativity():
+    deg_assort_dict = OrderedDict()
+    attr_assort_dict = OrderedDict()
+    file = open(osp.join('results-data', 'assortativity.csv'))
+    # Skip header
+    file.readline()
+    for line in file:
+        dataset_str, deg, attr = line.split(',')
+        deg_assort_dict[dataset_str] = float(deg)
+        attr_assort_dict[dataset_str] = float(attr)
+
+    deg_assorts = [deg_assort_dict[dataset] for dataset in datasets_names]
+    attr_assorts = [attr_assort_dict[dataset] for dataset in datasets_names]
+
+    x = np.array(range(len(datasets_names)))
+    h = 0.4
+    plt.figure(figsize=(4, 3.5))
+    plt.grid()
+    plt.rc('axes', axisbelow=True)
+    plt.barh(x - h, deg_assorts, height=h, label='Degree', align='edge')
+    plt.barh(x, attr_assorts, height=h, label='Attribute', align='edge')
+    plt.yticks([i for i in range(len(datasets_names))],
+               datasets_names.values())
+    plt.xlabel('Assortativity')
+    plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.20),
+              ncol=3, fancybox=True, shadow=True)
+    plt.tight_layout()
+    plt.show()
+
+
+# plot_distortions([273, 274, 275])
+# plot_distortions([259, 260, 261])
+
+# for dataset_str in ['cora', 'citeseer', 'pubmed', 'corafull',
+#                     'coauthorcs', 'coauthorphys', 'amazoncomp',
+#                     'amazonphoto']:
+#     get_graph_assortativity(dataset_str)
+
+dataset_boxplots()
+
+plot_assortativity()

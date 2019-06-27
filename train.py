@@ -124,7 +124,7 @@ def save_cloud_visualization(method, embeddings, vis_pos, vis_neg, epoch):
     ax2.scatter(points[:, 0], points[:, 1], color='lightgray')
 
     points = points.reshape(-1, num_points, 2)
-    colors = ['r', 'g', 'dodgerblue']
+    colors = ['C0', 'C1', 'C2']
     titles = ('Positive pairs', 'Negative pairs')
 
     for ax, vis, title in zip((ax1, ax2), (vis_pos, vis_neg), titles):
@@ -142,7 +142,7 @@ def save_cloud_visualization(method, embeddings, vis_pos, vis_neg, epoch):
         ax.set_axis_on()
         ax.set_title(title)
 
-    fig.savefig(f'cloud_{epoch:d}')
+    fig.savefig(f'cloud_{epoch:d}.pdf')
 
 
 @ex.capture
@@ -199,17 +199,17 @@ def train(dataset, method, lr, epochs, device_str, _run, link_prediction=False,
         best_epoch = 0
 
         # Sample positive and negative pairs for visualization
-        # num_samples = 100
-        # sample_idx = np.random.choice(range(train_pos.shape[1]), num_samples,
-        #                               replace=False)
-        # vis_pos = train_pos[:, sample_idx].numpy()
-        # vis_neg = train_neg[:, sample_idx].numpy()
+        num_samples = 100
+        sample_idx = np.random.choice(range(train_pos.shape[1]), num_samples,
+                                      replace=False)
+        vis_pos = train_pos[:, sample_idx].numpy()
+        vis_neg = train_neg[:, sample_idx].numpy()
         for epoch in range(1, epochs + 1):
-            # if epoch in [1, 5, 10, 20, 50, 100, 200, epochs]:
-            #     with torch.no_grad():
-            #         embeddings = method.encoder(x, edge_index).detach().cpu()
-            #         save_cloud_visualization(method, embeddings,
-            #                                  vis_pos, vis_neg, epoch)
+            if epoch in [1, 5, 10, 20, 50, 100, 200, epochs]:
+                with torch.no_grad():
+                    embeddings = method.encoder(x, edge_index).detach().cpu()
+                    save_cloud_visualization(method, embeddings,
+                                             vis_pos, vis_neg, epoch)
 
             method.train()
             optimizer.zero_grad()
@@ -339,13 +339,13 @@ def config():
     """
     dataset_str = 'cora'
 
-    encoder_str = 'mlp'
+    encoder_str = 'gcn'
     repr_str = 'point_cloud'
-    loss_str = 'bce_loss'
-    sampling_str = 'shortest_path'
+    loss_str = 'hinge_loss'
+    sampling_str = 'first_neighbors'
 
-    dimensions = [256, 128]
-    n_points = 1
+    dimensions = [256, 8]
+    n_points = 4
     edge_score = 'inner'
     classifier = 'set'
     lr = 0.01
@@ -391,9 +391,10 @@ def get_study(timestamp, _run):
                                        'hinge_loss']),
                   sherpa.Choice('sampling_str',
                                 range=['first_neighbors',
-                                       'ranked']),
+                                       'ranked',
+                                       'graph_corruption']),
                   sherpa.Choice('n_points',
-                                range=[1, 4, 8, 16])]
+                                range=[1, 4, 8])]
 
     algorithm = sherpa.algorithms.GridSearch()
 
