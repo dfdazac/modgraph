@@ -1,4 +1,4 @@
-import os.path as osp
+import sys
 import itertools
 from torch_geometric.datasets import Planetoid
 from .gnnbench import GNNBenchmark
@@ -6,12 +6,12 @@ import numpy as np
 import scipy.sparse as sp
 import torch
 from sklearn.metrics import (roc_auc_score, average_precision_score,
-                             accuracy_score, f1_score)
+                             accuracy_score, precision_recall_curve)
 from sklearn.model_selection import (StratifiedShuffleSplit, GridSearchCV,
                                      ShuffleSplit, PredefinedSplit)
 from sklearn.linear_model import LogisticRegressionCV
 from skorch.classifier import NeuralNetClassifier, NeuralNetBinaryClassifier
-from skorch.callbacks import EarlyStopping
+from skorch.callbacks import EarlyStopping, EpochScoring, PrintLog
 
 
 def sample_zero_entries(edge_index, seed, sample_mult=1.0):
@@ -218,6 +218,25 @@ def link_prediction_scores(pos_score, neg_score):
     return auc_score, ap_score
 
 
+def plot_pr_curve(pos_score, neg_score, label):
+    import matplotlib.pyplot as plt
+
+    preds = torch.cat((pos_score, neg_score)).detach().cpu().numpy()
+
+    targets = torch.cat((torch.ones_like(pos_score),
+                         torch.zeros_like(neg_score))).cpu().numpy()
+
+    precision, recall, thresholds = precision_recall_curve(targets, preds)
+
+    plt.step(recall, precision, where='post', label=label)
+    plt.ylabel('Precision')
+    plt.xlabel('Recall')
+    plt.legend()
+    plt.savefig('prec_recall')
+
+    return
+
+
 def build_data(emb, edges_pos, edges_neg):
     # Tensors on device
     pairs_pos = torch.stack((emb[edges_pos[0]], emb[edges_pos[1]]), dim=1)
@@ -360,32 +379,38 @@ def score_node_classification_sets(features, targets, model_class, device_str,
     sss = StratifiedShuffleSplit(n_splits=1, test_size=1 - p_labeled,
                                  random_state=seed)
     split_train, split_test = next(sss.split(features, targets))
+    train_scoring = EpochScoring('accuracy', on_train=True)
 
     net = NeuralNetClassifier(model_class, module__in_features=emb_dim,
                               module__n_classes=n_classes,
                               criterion=torch.nn.CrossEntropyLoss,
-                              device=device_str, max_epochs=100,
+                              device=device_str, max_epochs=300,
                               verbose=0, optimizer=torch.optim.Adam,
+                              lr=1e-2,
                               iterator_train__shuffle=True,
-                              batch_size=len(split_train))
+                              batch_size=len(split_train),
+                              callbacks=[train_scoring])
+
     params = {
         'lr': [1e-3, 1e-2, 1e-1],
         'module__drop1': [0, 0.2, 0.5],
         'module__drop2': [0, 0.2, 0.5],
         'optimizer__weight_decay': [0, 1e-4, 1e-3]
     }
-    gs = GridSearchCV(net, params, cv=2, scoring='accuracy')
+    gs = GridSearchCV(net, params, cv=3, scoring='accuracy')
 
     print('Training node classification model')
     gs.fit(features[split_train], targets[split_train])
-
     print('Best parameters: ', gs.best_params_)
     model = gs.best_estimator_
-    predicted = model.predict(features[split_test])
 
-    accuracy = accuracy_score(targets[split_test], predicted)
+    train_preds = model.predict(features[split_train])
+    train_acc = accuracy_score(targets[split_train], train_preds)
 
-    return accuracy
+    test_preds = model.predict(features[split_test])
+    test_acc = accuracy_score(targets[split_test], test_preds)
+
+    return train_acc, test_acc
 
 
 def get_data(dataset_str, path):
