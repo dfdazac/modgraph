@@ -23,6 +23,10 @@ class EmbeddingMethod(nn.Module):
         z = self.encoder(x, edge_index)
         return self.representation.score_link_pred(z, pairs)
 
+    def embed(self, x, edge_index):
+        z = self.encoder(x, edge_index)
+        return self.representation.embed(z)
+
     def forward(self, x, edge_index, pos_samples, neg_samples):
         if isinstance(self.representation, EuclideanInfomax):
             pos_samples = self.encoder(x, pos_samples)
@@ -44,7 +48,7 @@ class EmbeddingMethod(nn.Module):
             loss = self.loss(pos_score, neg_score)
 
             if hasattr(self.representation, "regularizer"):
-                loss += self.representation.regularizer(z)
+                loss += self.representation.regularizer
 
         return loss
 
