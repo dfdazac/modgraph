@@ -27,7 +27,7 @@ else:
 def build_method(encoder_str, num_features, dimensions, n_points, repr_str,
                  loss_str, sampling_str):
     emb_dim = dimensions[-1]
-    if repr_str in ['gaussian', 'gaussian_variational']:
+    if repr_str in ['gaussian', 'gaussian_variational', 'gaussian_flow']:
         # Meand and variance
         emb_dim = dimensions[-1] * 2
     elif repr_str == 'spherical_variational':
@@ -62,6 +62,8 @@ def build_method(encoder_str, num_features, dimensions, n_points, repr_str,
         representation = modgraph.HypersphericalVariational()
     elif repr_str == 'point_cloud':
         representation = modgraph.PointCloud(n_points)
+    elif repr_str == 'gaussian_flow':
+        representation = modgraph.GaussianFlow(in_features=emb_dim)
     else:
         raise ValueError(f'Unknown representation {repr_str}')
 
@@ -102,9 +104,9 @@ def save_cloud_visualization(method, embeddings, vis_pos, vis_neg, epoch):
                                  axis=-1))
     cloud_dists = cloud_dists.mean()
 
-    print(f'Epoch {epoch:d}')
-    print(f'Mean cloud variance: {distances:.6f}')
-    print(f'Total variance: {cloud_dists:.6f}')
+    # print(f'Epoch {epoch:d}')
+    # print(f'Mean cloud variance: {distances:.6f}')
+    # print(f'Total variance: {cloud_dists:.6f}')
 
     node_idx = np.unique(np.concatenate((vis_pos, vis_neg), axis=1))
     idx_to_pos = {idx: pos for pos, idx in enumerate(node_idx)}
@@ -142,7 +144,33 @@ def save_cloud_visualization(method, embeddings, vis_pos, vis_neg, epoch):
         ax.set_axis_on()
         ax.set_title(title)
 
-    fig.savefig(f'cloud_{epoch:d}.pdf')
+    fig.savefig('cloud')
+
+
+def save_embedding_visualization(method, embeddings, labels):
+    num_samples = embeddings.shape[0]
+    if hasattr(method.representation, 'n_points'):
+        num_points = method.representation.n_points
+    else:
+        num_points = 1
+
+    emb_dim = embeddings.shape[1] // num_points
+    points = embeddings.reshape(num_samples, num_points, -1).numpy()
+
+    if emb_dim > 2:
+        if emb_dim > 64:
+            reducer = TSNE(n_components=2, init='pca', random_state=0)
+        else:
+            reducer = PCA(n_components=2)
+
+        points = reducer.fit_transform(points.reshape(-1, emb_dim))
+    else:
+        points = points.reshape(-1, 2)
+
+    n_labels = np.unique(labels).size
+    plt.scatter(points[:, 0], points[:, 1], c=labels,
+                cmap=plt.cm.get_cmap('jet', n_labels))
+    plt.savefig('embeddings')
 
 
 @ex.capture
@@ -205,11 +233,13 @@ def train(dataset, method, lr, epochs, device_str, _run, link_prediction=False,
         vis_pos = train_pos[:, sample_idx].numpy()
         vis_neg = train_neg[:, sample_idx].numpy()
         for epoch in range(1, epochs + 1):
-            if epoch in [1, 5, 10, 20, 50, 100, 200, epochs]:
-                with torch.no_grad():
-                    embeddings = method.encoder(x, edge_index).detach().cpu()
-                    save_cloud_visualization(method, embeddings,
-                                             vis_pos, vis_neg, epoch)
+            # if epoch == epochs:
+            #     with torch.no_grad():
+            #         embeddings = method.embed(x, edge_index).detach().cpu()
+            #         # save_cloud_visualization(method, embeddings,
+            #         #                          vis_pos, vis_neg, epoch)
+            #         save_embedding_visualization(method, embeddings,
+            #                                      dataset.y.numpy())
 
             method.train()
             optimizer.zero_grad()
@@ -241,14 +271,14 @@ def train(dataset, method, lr, epochs, device_str, _run, link_prediction=False,
                     best_epoch = epoch
                     torch.save(method.state_dict(), ckpt_path)
 
-                if epoch % 20 == 0:
+                if epoch % 50 == 0:
                     time = datetime.now().strftime("%Y-%m-%d %H:%M")
                     log = ('[{}] [{:03d}/{:03d}] train loss: {:.6f}, '
                            'val_auc: {:6f}, val_ap: {:6f}')
                     print(log.format(time, epoch, epochs, loss.item(),
                                      auc, ap))
 
-            elif epoch % 20 == 0:
+            elif epoch % 50 == 0:
                 time = datetime.now().strftime("%Y-%m-%d %H:%M")
                 log = '[{}] [{:03d}/{:03d}] train loss: {:.6f}'
                 print(log.format(time, epoch, epochs, loss.item()))
@@ -270,18 +300,21 @@ def train(dataset, method, lr, epochs, device_str, _run, link_prediction=False,
         embeddings = x.cpu()
     else:
         method.eval()
-        embeddings = method.encoder(x, edge_index).detach().cpu()
+        embeddings = method.encoder(x, edge_index)  # .detach().cpu()
 
     results = -np.ones([3, 2])
     if link_prediction:
         if edge_score_class is None:
             # Evaluate on training, validation and test splits
+            labels = ['train', 'val', 'test']
             for i, (pos, neg) in enumerate(zip(pos_split, neg_split)):
                 # pos_scores = method.score_pairs(x, edge_index, pos)
                 pos_scores = method.representation.score_link_pred(embeddings, pos)
                 # neg_scores = method.score_pairs(x, edge_index, neg)
                 neg_scores = method.representation.score_link_pred(embeddings, neg)
                 results[i] = utils.link_prediction_scores(pos_scores, neg_scores)
+
+                utils.plot_pr_curve(pos_scores, neg_scores, labels[i])
         else:
             if method in ['graph2gauss', 'graph2vec']:
                 # Use the mean for downstream evaluation
@@ -340,16 +373,16 @@ def config():
     dataset_str = 'cora'
 
     encoder_str = 'gcn'
-    repr_str = 'point_cloud'
-    loss_str = 'hinge_loss'
+    repr_str = 'euclidean_infomax'
+    loss_str = 'bce_loss'
     sampling_str = 'first_neighbors'
 
-    dimensions = [256, 8]
+    dimensions = [256, 128]
     n_points = 4
     edge_score = 'inner'
     classifier = 'set'
-    lr = 0.01
-    epochs = 1000
+    lr = 0.001
+    epochs = 200
     train_node2vec = False
     p_labeled = 0.1
     n_exper = 20

@@ -126,5 +126,6 @@ data/*
 logs/*
 !logs/.gitkeep
 *.pt
+*.csv
 
 .envrc

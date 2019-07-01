@@ -1,6 +1,6 @@
 import os
 import os.path as osp
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 
 from pymongo import MongoClient
 from matplotlib import rc, rcParams
@@ -16,9 +16,9 @@ from modgraph.utils import get_data, adj_from_edge_index
 # rcParams['font.family'] = 'sans-serif'
 # rcParams['font.sans-serif'] = ['Helvetica Neue']
 
-rcParams.update({'font.size': 11})
-rc('text', usetex=True)
-plt.rc('font', family='serif')
+# rcParams.update({'font.size': 11})
+# rc('text', usetex=True)
+# plt.rc('font', family='serif')
 
 rcParams['axes.axisbelow'] = True
 
@@ -41,9 +41,13 @@ def get_uri_db_pair():
         raise ConnectionError('Could not find URI or database')
 
 
-def get_experiment(exp_id):
+def get_experiment_loader():
     uri, database = get_uri_db_pair()
-    loader = ExperimentLoader(mongo_uri=uri, db_name=database)
+    return ExperimentLoader(mongo_uri=uri, db_name=database)
+
+
+def get_experiment_by_id(exp_id):
+    loader = get_experiment_loader()
     ex = loader.find_by_id(exp_id)
     return ex
 
@@ -343,7 +347,7 @@ def plot_losses():
 def plot_distortions(ids):
     plt.figure(figsize=(3.2, 2.5))
     for exp_id in ids:
-        exp = get_experiment(exp_id)
+        exp = get_experiment_by_id(exp_id)
         n_points = exp.config['n_points']
         distortion = exp.metrics['loss']
         dist_smooth = gaussian_filter1d(distortion, sigma=4)
@@ -383,9 +387,58 @@ def plot_assortativity():
                datasets_names.values())
     plt.xlabel('Assortativity')
     plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.20),
-              ncol=3, fancybox=True, shadow=True)
+               ncol=2, fancybox=True, shadow=True)
     plt.tight_layout()
     plt.show()
+
+
+def plot_train_test_ap(query, max_num_datasets=3):
+    num_datasets = len(datasets_names)
+    if max_num_datasets < 1 or max_num_datasets > num_datasets:
+        raise ValueError(f'max_num_datasets should be between 1'
+                         f' and {num_datasets:d}')
+
+    loader = get_experiment_loader()
+
+    experiments = loader.find(query)
+
+    dataset_metrics = defaultdict(dict)
+
+    for exp in experiments:
+        dataset = exp.config['dataset_str']
+        if dataset not in datasets_names:
+            raise ValueError(f'Unrecognized dataset {dataset}')
+
+        encoder = exp.config['encoder_str']
+        train_ap = exp.metrics['train AP mean'][0]
+        test_ap = exp.metrics['test AP mean'][0]
+        dataset_metrics[dataset][encoder] = [train_ap, test_ap]
+
+    metrics = {encoder: {'train': [], 'test': []} for encoder in ['gcn', 'sgc']}
+    for dataset in reversed(datasets_names):
+        for encoder in metrics:
+            train_ap, test_ap = dataset_metrics[dataset][encoder]
+            metrics[encoder]['train'].append(train_ap)
+            metrics[encoder]['test'].append(test_ap)
+
+    ax_multiplier = 2
+    w = 0.3
+    x = np.array(range(num_datasets)) * ax_multiplier
+    plt.figure()
+    plt.bar(x - 2*w, metrics['gcn']['train'], width=0.3, color='C0')
+    plt.bar(x - w, metrics['gcn']['test'], width=0.3, color='C1')
+    plt.bar(x + w, metrics['sgc']['train'], width=0.3, color='C0')
+    plt.bar(x + 2*w, metrics['sgc']['test'], width=0.3, color='C1')
+    plt.show()
+
+
+conditions = {'$and': [{'config.timestamp': '1558092869'},
+                       {'command': 'link_pred_experiments'},
+                       {'config.method': 'dgi'},
+                       {'config.encoder_str': {'$in': ['gcn', 'sgc']}}
+                       ]
+              }
+plot_train_test_ap(conditions)
 
 
 # plot_distortions([273, 274, 275])
@@ -396,6 +449,10 @@ def plot_assortativity():
 #                     'amazonphoto']:
 #     get_graph_assortativity(dataset_str)
 
-dataset_boxplots()
+# dataset_boxplots()
 
-plot_assortativity()
+# plot_assortativity()
+
+# get_graph_assortativity('citeseer')
+
+
