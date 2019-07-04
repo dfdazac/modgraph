@@ -40,9 +40,9 @@ class FirstNeighborSampling(NodeSampling):
 
 
 class RankedSampling(NodeSampling):
-    def __init__(self, iters, edge_index, *args, **kwargs):
+    def __init__(self, iters, edge_index, num_nodes, *args, **kwargs):
         super(RankedSampling, self).__init__(iters, edge_index)
-        adj = adj_from_edge_index(edge_index)
+        adj = adj_from_edge_index(edge_index, num_nodes)
         self.hops = get_hops(adj)
 
     def __getitem__(self, item):
@@ -66,9 +66,9 @@ class GraphCorruptionSampling(NodeSampling):
 
 
 class ShortestPathSampling(NodeSampling):
-    def __init__(self, iters, edge_index, cutoff=10, *args, **kwargs):
+    def __init__(self, iters, edge_index, num_nodes, cutoff=10, *args, **kwargs):
         super(ShortestPathSampling, self).__init__(iters, edge_index)
-        adj = adj_from_edge_index(edge_index)
+        adj = adj_from_edge_index(edge_index, num_nodes)
         graph = nx.from_scipy_sparse_matrix(adj)
         self.paths = dict(nx.all_pairs_shortest_path_length(graph, cutoff))
         for source_idx in self.paths:

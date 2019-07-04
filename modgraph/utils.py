@@ -14,12 +14,13 @@ from skorch.classifier import NeuralNetClassifier, NeuralNetBinaryClassifier
 from skorch.callbacks import EarlyStopping, EpochScoring, PrintLog
 
 
-def sample_zero_entries(edge_index, seed, sample_mult=1.0):
+def sample_zero_entries(edge_index, seed, num_nodes, sample_mult=1.0):
     """Obtain zero entries from a sparse matrix.
 
     Args:
         edge_index (tensor): (2, N), N is the number of edges.
         seed (int): to control randomness
+        num_nodes (int): number of nodes in the graph
         sample_mult (float): the number of edges sampled is
             N * sample_mult.
 
@@ -31,7 +32,7 @@ def sample_zero_entries(edge_index, seed, sample_mult=1.0):
     np.random.seed(seed)
     # Number of edges in both directions must be even
     n_samples = int(np.ceil(sample_mult * n_edges / 2) * 2)
-    adjacency = adj_from_edge_index(edge_index)
+    adjacency = adj_from_edge_index(edge_index, num_nodes)
     zero_entries = np.zeros([2, n_samples], dtype=np.int32)
     nonzero_or_sampled = set(zip(*adjacency.nonzero()))
 
@@ -56,13 +57,14 @@ def sample_zero_entries(edge_index, seed, sample_mult=1.0):
     return torch.tensor(zero_entries, dtype=torch.long)
 
 
-def split_edges(edge_index, seed, add_self_connections=False,
+def split_edges(edge_index, num_nodes, seed, add_self_connections=False,
                 num_val=None, num_test=None):
     """Obtain train/val/test edges for an *undirected*
     graph given m an edge index.
 
     Args:
         edge_index (tensor): (2, N), N is the number of edges.
+        num_nodes (int): number of nodes in the graph
         seed (int): to control randomness
         add_self_connections (bool):
 
@@ -70,7 +72,7 @@ def split_edges(edge_index, seed, add_self_connections=False,
         list, containing 3 tensors of shape (2, N) corresponding to
             train, validation and test splits respectively.
     """
-    adj = adj_from_edge_index(edge_index)
+    adj = adj_from_edge_index(edge_index, num_nodes)
     # Remove diagonal elements
     adj = adj - sp.dia_matrix((adj.diagonal()[np.newaxis, :], [0]),
                                shape=adj.shape)
@@ -125,13 +127,13 @@ def add_reverse_edges(edges):
     return all_edges
 
 
-def adj_from_edge_index(edge_index):
+def adj_from_edge_index(edge_index, num_nodes):
     """Get a sparse symmetric adjacency matrix from an edge index (as the one
     used in the torch_geometric.datasets.Planetoid class).
 
     Args:
         edge_index (tensor): (2, N), N is the number of edges.
-
+        num_nodes (int): number of nodes in the graph
     Returns:
         scipy scr adjacency matrix
     """
@@ -139,7 +141,8 @@ def adj_from_edge_index(edge_index):
     rows = edge_index[0].numpy()
     cols = edge_index[1].numpy()
     values = np.ones(n_edges, dtype=np.bool)
-    partial_adj = sp.coo_matrix((values, (rows, cols)))
+    partial_adj = sp.coo_matrix((values, (rows, cols)),
+                                shape=(num_nodes, num_nodes))
     boolean_adj = partial_adj + partial_adj.T
     return boolean_adj.astype(np.int64).tocsr()
 
@@ -429,15 +432,17 @@ def get_data(dataset_str, path):
 def get_data_splits(dataset, neg_sample_mult, link_prediction,
                     add_self_connections=False, seed=0):
     neg_edge_index = sample_zero_entries(dataset.edge_index, seed,
-                                         neg_sample_mult)
+                                         dataset.num_nodes, neg_sample_mult)
 
     if link_prediction:
         # For link prediction we split edges in train/val/test sets
-        train_pos, val_pos, test_pos = split_edges(dataset.edge_index, seed,
+        train_pos, val_pos, test_pos = split_edges(dataset.edge_index,
+                                                   dataset.num_nodes, seed,
                                                    add_self_connections)
 
         num_val, num_test = val_pos.shape[1], test_pos.shape[1]
-        train_neg_all, val_neg, test_neg = split_edges(neg_edge_index, seed,
+        train_neg_all, val_neg, test_neg = split_edges(neg_edge_index,
+                                                       dataset.num_nodes, seed,
                                                        num_val=num_val,
                                                        num_test=num_test)
     else:

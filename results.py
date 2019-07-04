@@ -10,15 +10,16 @@ from sklearn.manifold import TSNE
 import networkx as nx
 from scipy.ndimage.filters import gaussian_filter1d
 from incense import ExperimentLoader
+import pandas as pd
 
 from modgraph.utils import get_data, adj_from_edge_index
 
 # rcParams['font.family'] = 'sans-serif'
 # rcParams['font.sans-serif'] = ['Helvetica Neue']
 
-# rcParams.update({'font.size': 11})
-# rc('text', usetex=True)
-# plt.rc('font', family='serif')
+rcParams.update({'font.size': 11})
+rc('text', usetex=True)
+plt.rc('font', family='serif')
 
 rcParams['axes.axisbelow'] = True
 
@@ -155,7 +156,7 @@ def dataset_boxplots():
     for dataset in datasets_names:
         path = osp.join('data', dataset)
         data = get_data(dataset, path)
-        adj = adj_from_edge_index(data.edge_index)
+        adj = adj_from_edge_index(data.edge_index, dataset.num_nodes)
         degrees = np.array(adj.sum(axis=0)).squeeze()
         X.append(degrees)
 
@@ -190,7 +191,8 @@ def plot_embeddings(method, dataset_str):
     data = get_data(dataset_str)
     labels = data.y.numpy()
     n_labels = np.unique(labels).size
-    graph = nx.from_scipy_sparse_matrix(adj_from_edge_index(data.edge_index))
+    graph = nx.from_scipy_sparse_matrix(adj_from_edge_index(data.edge_index,
+                                                            data.num_nodes))
     y = data.y.numpy()
 
     z = TSNE(n_components=2).fit_transform(embeddings)
@@ -230,7 +232,7 @@ def plot_adjacency(method, dataset_str):
 
     embeddings = np.load('emb_' + method + '.npy')
     data = get_data(dataset_str)
-    adj = adj_from_edge_index(data.edge_index)
+    adj = adj_from_edge_index(data.edge_index, data.num_nodes)
     fig, ax = plt.subplots()
     ax.imshow(adj.toarray(), cmap='binary')
     fig.savefig('adj')
@@ -288,7 +290,7 @@ def sge_curve(dataset_str):
 def get_graph_assortativity(dataset_str):
     path = osp.join('data', dataset_str)
     data = get_data(dataset_str, path)
-    adj = adj_from_edge_index(data.edge_index)
+    adj = adj_from_edge_index(data.edge_index, data.num_nodes)
     graph = nx.from_scipy_sparse_matrix(adj)
 
     # Add node attributes
@@ -432,13 +434,59 @@ def plot_train_test_ap(query, max_num_datasets=3):
     plt.show()
 
 
-conditions = {'$and': [{'config.timestamp': '1558092869'},
-                       {'command': 'link_pred_experiments'},
-                       {'config.method': 'dgi'},
-                       {'config.encoder_str': {'$in': ['gcn', 'sgc']}}
-                       ]
-              }
-plot_train_test_ap(conditions)
+def parallel_coordinates_plot(log_id, metrics, xtick_labels, ylabel):
+    if len(metrics) != len(xtick_labels):
+        raise ValueError('metrics and labels should have the same length.')
+
+    path = osp.join('logs', log_id, 'results.csv')
+    df = pd.read_csv(path)
+
+    print('Read data with the following columns:')
+    print(df.columns)
+
+    inner_score_idx = df.repr_str.isin(['euclidean_inner', 'euclidean_bilinear'])
+    df_product = df[inner_score_idx]
+    df_distance = df[~inner_score_idx]
+    labels = ['IP', 'Dist']
+
+    plt.figure(figsize=(4, 3.5))
+    for i, df in enumerate((df_product, df_distance)):
+        df = df[metrics]
+        plt.plot(df.transpose(), f'C{i:d}', alpha=0.1, label=labels[i])
+
+    plt.xticks(range(len(metrics)), xtick_labels)
+    plt.ylabel(ylabel)
+
+    handles, labels = plt.gca().get_legend_handles_labels()
+    labels, ids = np.unique(labels, return_index=True)
+    handles = [handles[i] for i in ids]
+    leg = plt.legend(handles, labels, loc='upper center', bbox_to_anchor=(0.5, 1.20),
+               ncol=2, fancybox=True, shadow=True)
+    for lh in leg.legendHandles:
+        lh._alpha = 1
+
+    plt.tight_layout()
+    plt.show()
+
+
+# Cora
+parallel_coordinates_plot('1558263980', ['train_ap', 'test_ap'],
+                          ['Train', 'Test'], 'AP')
+parallel_coordinates_plot('1558295765', ['train_acc', 'Objective'],
+                          ['Train', 'Test'], 'Accuracy')
+# Citeseer
+parallel_coordinates_plot('1558824673', ['train_ap', 'test_ap'],
+                          ['Train', 'Test'], 'AP')
+parallel_coordinates_plot('1558899609', ['train_acc', 'Objective'],
+                          ['Train', 'Test'], 'Accuracy')
+
+# conditions = {'$and': [{'config.timestamp': '1558092869'},
+#                        {'command': 'link_pred_experiments'},
+#                        {'config.method': 'dgi'},
+#                        {'config.encoder_str': {'$in': ['gcn', 'sgc']}}
+#                        ]
+#               }
+# plot_train_test_ap(conditions)
 
 
 # plot_distortions([273, 274, 275])

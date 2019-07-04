@@ -82,7 +82,7 @@ class LookupEncoder(nn.Module):
 class Node2Vec(nn.Module):
     def __init__(self, edge_index, num_nodes, dim=128):
         super(Node2Vec, self).__init__()
-        adj = adj_from_edge_index(edge_index)
+        adj = adj_from_edge_index(edge_index, num_nodes)
         nx_graph = nx.from_scipy_sparse_matrix(adj)
         for edge in nx_graph.edges():
             nx_graph[edge[0]][edge[1]]['weight'] = 1
