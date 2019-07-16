@@ -49,6 +49,7 @@ class EmbeddingMethod(nn.Module):
 
             if hasattr(self.representation, "regularizer"):
                 loss += self.representation.regularizer
+                self.representation.regularizer = 0
 
         return loss
 

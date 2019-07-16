@@ -142,8 +142,8 @@ class GaussianVariational(Representation):
         mu, logvar = torch.split(z, emb_dim, dim=1)
         z = mu + torch.randn_like(mu) * torch.sqrt(torch.exp(logvar))
 
-        self.regularizer = 0.5 * (torch.exp(logvar) + mu ** 2 - logvar - 1)
-        self.regularizer = self.regularizer.mean()
+        regularizer = 0.5 * (torch.exp(logvar) + mu ** 2 - logvar - 1)
+        self.regularizer = self.regularizer + regularizer.mean()
 
         return EuclideanInnerProduct.score(z, pairs)
 
@@ -306,12 +306,12 @@ class GaussianFlow(Representation, nn.Module):
         summed_ldj = torch.sum(log_det_j)
 
         # ldj = N E_q_z0[\sum_k log |det dz_k/dz_k-1| ]
-        self.regularizer = (summed_logs - summed_ldj)/batch_size
+        self.regularizer = self.regularizer + (summed_logs - summed_ldj)/batch_size
 
         return EuclideanInnerProduct.score(z[-1], pairs)
 
     def score_link_pred(self, z, pairs):
-        z = self.embed(z)
+        #z = self.embed(z)
         return EuclideanInnerProduct.score(z, pairs)
 
     def embed(self, z):
@@ -346,11 +346,11 @@ class HypersphericalVariational(Representation):
         emb_dim = z.shape[1] - 1
         z_mean, z_var = torch.split(z, emb_dim, dim=1)
         z_mean = z_mean / z_mean.norm(dim=-1, keepdim=True)
-        z_var = F.softplus(z_var) + 1
+        z_var = F.softplus(z_var) + 1e-9
         q_z = VonMisesFisher(z_mean, z_var)
         z = q_z.rsample()
 
-        self.regularizer = kl_divergence(q_z, self.uniform).mean()
+        self.regularizer = self.regularizer + kl_divergence(q_z, self.uniform).mean()
 
         return EuclideanInnerProduct.score(z, pairs)
 

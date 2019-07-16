@@ -313,37 +313,40 @@ def plot_losses():
     # BCE loss
     s = np.linspace(0.01, 0.99, num=100)
     plt.figure(figsize=size)
-    plt.plot(s, -np.log(s), 'k', label=r'$\mathcal{L}(S)$')
-    plt.plot(s, -np.log(1-s), 'k--', label=r'$\mathcal{L}(\tilde{S})$')
+    plt.plot(s, -np.log(s), label=r'$\mathcal{L}(E)$')
+    plt.plot(s, -np.log(1-s), label=r'$\mathcal{L}(\tilde{E})$')
     plt.tight_layout()
-    #plt.legend(loc='upper right')
+    plt.legend(loc='upper right')
 
     # Square-exponential loss
     s = np.linspace(-2, 2, num=100)
     plt.figure(figsize=size)
-    plt.plot(s, s**2, 'k',  label=r'$\mathcal{L}(S)$')
-    plt.plot(s, np.exp(-s), 'k--',  label=r'$\mathcal{L}(\tilde{S})$')
+    plt.plot(s, s**2, label=r'$\mathcal{L}(E)$')
+    plt.plot(s, np.exp(-s), label=r'$\mathcal{L}(\tilde{E})$')
     plt.tight_layout()
-    #plt.legend(loc='upper right')
+    plt.legend(loc='upper right')
 
     # Hinge loss
     plt.figure(figsize=size)
     loss = 1 + s
     loss[loss < 0] = 0.0
-    plt.plot(s, loss,  'k', label=r'$\mathcal{L}(S - \tilde{S})$')
+    plt.plot(s, loss,  label=r'$\mathcal{L}(E - \tilde{E})$')
     plt.tight_layout()
-    #plt.legend(loc='upper right')
+    plt.legend(loc='upper right')
 
     # Square-square loss
     plt.figure(figsize=size)
     neg_loss = 1 - s
     neg_loss[neg_loss < 0] = 0.0
-    plt.plot(s, s**2, label=r'$\mathcal{L}(S)$')
-    plt.plot(s, neg_loss**2, '--',  label=r'$\mathcal{L}(\tilde{S})$')
+    plt.plot(s, s**2, label=r'$\mathcal{L}(E)$')
+    plt.plot(s, neg_loss**2, '--',  label=r'$\mathcal{L}(\tilde{E})$')
     plt.tight_layout()
-    #plt.legend(loc='upper right')
+    plt.legend(loc='upper right')
 
     plt.show()
+
+
+plot_losses()
 
 
 def plot_distortions(ids):
@@ -362,6 +365,10 @@ def plot_distortions(ids):
     plt.legend(loc='upper right')
     plt.tight_layout()
     plt.show()
+
+
+# plot_distortions([273, 274, 275])
+# plot_distortions([259, 260, 261])
 
 
 def plot_assortativity():
@@ -434,6 +441,15 @@ def plot_train_test_ap(query, max_num_datasets=3):
     plt.show()
 
 
+# conditions = {'$and': [{'config.timestamp': '1558092869'},
+#                        {'command': 'link_pred_experiments'},
+#                        {'config.method': 'dgi'},
+#                        {'config.encoder_str': {'$in': ['gcn', 'sgc']}}
+#                        ]
+#               }
+# plot_train_test_ap(conditions)
+
+
 def parallel_coordinates_plot(log_id, metrics, xtick_labels, ylabel):
     if len(metrics) != len(xtick_labels):
         raise ValueError('metrics and labels should have the same length.')
@@ -460,8 +476,9 @@ def parallel_coordinates_plot(log_id, metrics, xtick_labels, ylabel):
     handles, labels = plt.gca().get_legend_handles_labels()
     labels, ids = np.unique(labels, return_index=True)
     handles = [handles[i] for i in ids]
-    leg = plt.legend(handles, labels, loc='upper center', bbox_to_anchor=(0.5, 1.20),
-               ncol=2, fancybox=True, shadow=True)
+    leg = plt.legend(handles, labels, loc='upper center',
+                     bbox_to_anchor=(0.5, 1.20),
+                     ncol=2, fancybox=True, shadow=True)
     for lh in leg.legendHandles:
         lh._alpha = 1
 
@@ -470,27 +487,74 @@ def parallel_coordinates_plot(log_id, metrics, xtick_labels, ylabel):
 
 
 # Cora
-parallel_coordinates_plot('1558263980', ['train_ap', 'test_ap'],
-                          ['Train', 'Test'], 'AP')
-parallel_coordinates_plot('1558295765', ['train_acc', 'Objective'],
-                          ['Train', 'Test'], 'Accuracy')
-# Citeseer
-parallel_coordinates_plot('1558824673', ['train_ap', 'test_ap'],
-                          ['Train', 'Test'], 'AP')
-parallel_coordinates_plot('1558899609', ['train_acc', 'Objective'],
-                          ['Train', 'Test'], 'Accuracy')
-
-# conditions = {'$and': [{'config.timestamp': '1558092869'},
-#                        {'command': 'link_pred_experiments'},
-#                        {'config.method': 'dgi'},
-#                        {'config.encoder_str': {'$in': ['gcn', 'sgc']}}
-#                        ]
-#               }
-# plot_train_test_ap(conditions)
+# parallel_coordinates_plot('1558263980', ['train_ap', 'val_ap'],
+#                           ['Train', 'Valid'], 'AP')
+# parallel_coordinates_plot('1558295765', ['train_acc', 'Objective'],
+#                           ['Train', 'Test'], 'Accuracy')
+# # Citeseer
+# parallel_coordinates_plot('1558824673', ['train_ap', 'val_ap'],
+#                           ['Train', 'Valid'], 'AP')
+# parallel_coordinates_plot('1558899609', ['train_acc', 'Objective'],
+#                           ['Train', 'Test'], 'Accuracy')
 
 
-# plot_distortions([273, 274, 275])
-# plot_distortions([259, 260, 261])
+def plot_lsgae_pca(filename):
+    w = 0.3
+    with open(filename) as file:
+        file.readline()
+        methods = {}
+        for i, line in enumerate(file):
+            values = line.split(',')
+            method = values[0]
+            means = list(map(float, values[1::2]))
+            stdevs = list(map(float, values[2::2]))
+            methods[method] = (means, stdevs)
+
+            x = np.array(range(len(means)))
+            plt.bar(x + i * w, means, width=w)
+
+    plt.show()
+
+
+# plot_lsgae_pca('results-data/lsgae-pca-lp.csv')
+
+
+def parallel_coordinates_plot_wasserstein(log_id, encoder, metrics,
+                                          xtick_labels, ylabel):
+    if len(metrics) != len(xtick_labels):
+        raise ValueError('metrics and labels should have the same length.')
+
+    path = osp.join('logs', log_id, 'results.csv')
+    df = pd.read_csv(path)
+
+    print('Read data with the following columns:')
+    print(df.columns)
+
+    df_idx = df.encoder_str == encoder
+
+    plt.figure(figsize=(2.5, 2.0))
+    df = df[df_idx][metrics]
+    plt.plot(df.transpose(), 'C0', alpha=0.1)
+    max_ap = max(df['test_ap'])
+    plt.plot([0, 1], [max_ap, max_ap], 'k--')
+
+    plt.xticks(range(len(metrics)), xtick_labels)
+    plt.ylabel(ylabel)
+    plt.ylim([0.7, 1.05])
+    plt.tight_layout()
+    plt.show()
+
+
+# Cora
+# parallel_coordinates_plot_wasserstein('1559740076', 'mlp',
+#                                       ['train_ap', 'test_ap'],
+#                                       ['Train', 'Test'], 'AP')
+# parallel_coordinates_plot_wasserstein('1559740076', 'gcn',
+#                                       ['train_ap', 'test_ap'],
+#                                       ['Train', 'Test'], 'AP')
+# parallel_coordinates_plot_wasserstein('1559740076', 'sgc',
+#                                       ['train_ap', 'test_ap'],
+#                                       ['Train', 'Test'], 'AP')
 
 # for dataset_str in ['cora', 'citeseer', 'pubmed', 'corafull',
 #                     'coauthorcs', 'coauthorphys', 'amazoncomp',
@@ -502,5 +566,3 @@ parallel_coordinates_plot('1558899609', ['train_acc', 'Objective'],
 # plot_assortativity()
 
 # get_graph_assortativity('citeseer')
-
-

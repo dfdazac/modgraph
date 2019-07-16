@@ -363,12 +363,12 @@ def train(dataset, method, lr, epochs, device_str, _run, link_prediction=False,
             if edge_score_class is None:
                 # Evaluate on training, validation and test splits
                 labels = ['train', 'val', 'test']
+                scoring_fn = method.representation.score_link_pred
                 for i, (pos, neg) in enumerate(zip(pos_split, neg_split)):
-                    # pos_scores = method.score_pairs(x, edge_index, pos)
-                    pos_scores = method.representation.score_link_pred(embeddings, pos)
-                    # neg_scores = method.score_pairs(x, edge_index, neg)
-                    neg_scores = method.representation.score_link_pred(embeddings, neg)
-                    results[i] = utils.link_prediction_scores(pos_scores, neg_scores)
+                    pos_scores = scoring_fn(embeddings, pos)
+                    neg_scores = scoring_fn(embeddings, neg)
+                    results[i] = utils.link_prediction_scores(pos_scores,
+                                                              neg_scores)
 
                     # utils.plot_pr_curve(pos_scores, neg_scores, labels[i])
             else:
@@ -426,11 +426,11 @@ def config():
     device (str): one of {'cpu', 'cuda'}
     timestamp (str): unique identifier for a set of experiments
     """
-    dataset_str = 'pubmed'
+    dataset_str = 'cora'
 
-    encoder_str = 'sgc'
-    repr_str = 'euclidean_inner'
-    loss_str = 'hinge_loss'
+    encoder_str = 'gcn'
+    repr_str = 'gaussian_flow'
+    loss_str = 'bce_loss'
     sampling_str = 'first_neighbors'
 
     dimensions = [256, 128]
@@ -438,10 +438,10 @@ def config():
     edge_score = 'inner'
     classifier = 'set'
     lr = 0.001
-    epochs = 200
+    epochs = 2000
 
     # FIXME: add to all methods
-    baseline = 'svd'
+    baseline = None
 
     p_labeled = 0.1
     n_exper = 20
