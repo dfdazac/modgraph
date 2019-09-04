@@ -3,16 +3,13 @@ import os.path as osp
 import random
 from datetime import datetime
 
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from sacred import Experiment
 from sacred.observers import MongoObserver
-from sklearn.decomposition import PCA, TruncatedSVD
-from sklearn.manifold import TSNE
+from sklearn.decomposition import TruncatedSVD
 
 import scipy.sparse as sp
-import scipy.sparse.linalg as spl
 
 import modgraph
 import modgraph.utils as utils
@@ -89,94 +86,6 @@ def build_method(encoder_str, num_features, dimensions, n_points, repr_str,
     return modgraph.EmbeddingMethod(encoder, representation, loss, sampling_class)
 
 
-def save_cloud_visualization(method, embeddings, vis_pos, vis_neg, epoch):
-    num_samples = embeddings.shape[0]
-    if hasattr(method.representation, 'n_points'):
-        num_points = method.representation.n_points
-    else:
-        num_points = 1
-
-    emb_dim = embeddings.shape[1] // num_points
-    points = embeddings.reshape(num_samples, num_points, -1).numpy()
-
-    means = points.mean(axis=1, keepdims=True)
-    distances = np.sqrt(np.sum((points - means) ** 2, axis=-1))
-    distances = distances.mean()
-
-    cloud_mean = points.reshape(-1, emb_dim).mean(axis=0, keepdims=True)
-    cloud_dists = np.sqrt(np.sum((points.reshape(-1, emb_dim) - cloud_mean)**2,
-                                 axis=-1))
-    cloud_dists = cloud_dists.mean()
-
-    # print(f'Epoch {epoch:d}')
-    # print(f'Mean cloud variance: {distances:.6f}')
-    # print(f'Total variance: {cloud_dists:.6f}')
-
-    node_idx = np.unique(np.concatenate((vis_pos, vis_neg), axis=1))
-    idx_to_pos = {idx: pos for pos, idx in enumerate(node_idx)}
-    points = points[node_idx]
-    if emb_dim > 2:
-        if emb_dim > 64:
-            reducer = TSNE(n_components=2, init='pca', random_state=0)
-        else:
-            reducer = PCA(n_components=2)
-
-        points = reducer.fit_transform(points.reshape(-1, emb_dim))
-    else:
-        points = points.reshape(-1, 2)
-
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(8, 4))
-    ax1.scatter(points[:, 0], points[:, 1], color='lightgray')
-    ax2.scatter(points[:, 0], points[:, 1], color='lightgray')
-
-    points = points.reshape(-1, num_points, 2)
-    colors = ['C0', 'C1', 'C2']
-    titles = ('Positive pairs', 'Negative pairs')
-
-    for ax, vis, title in zip((ax1, ax2), (vis_pos, vis_neg), titles):
-        for i, color in enumerate(colors):
-            cloud_a_idx = idx_to_pos[vis[0, i]]
-            cloud_a = points[cloud_a_idx]
-            ax.scatter(cloud_a[:, 0], cloud_a[:, 1], s=60, color=color,
-                       marker='o', edgecolors='k')
-
-            cloud_a_idx = idx_to_pos[vis[1, i]]
-            cloud_a = points[cloud_a_idx]
-            ax.scatter(cloud_a[:, 0], cloud_a[:, 1], s=60, color=color,
-                       marker='X', edgecolors='k')
-
-        ax.set_axis_on()
-        ax.set_title(title)
-
-    fig.savefig('cloud')
-
-
-def save_embedding_visualization(method, embeddings, labels):
-    num_samples = embeddings.shape[0]
-    if hasattr(method.representation, 'n_points'):
-        num_points = method.representation.n_points
-    else:
-        num_points = 1
-
-    emb_dim = embeddings.shape[1] // num_points
-    points = embeddings.reshape(num_samples, num_points, -1).numpy()
-
-    if emb_dim > 2:
-        if emb_dim > 64:
-            reducer = TSNE(n_components=2, init='pca', random_state=0)
-        else:
-            reducer = PCA(n_components=2)
-
-        points = reducer.fit_transform(points.reshape(-1, emb_dim))
-    else:
-        points = points.reshape(-1, 2)
-
-    n_labels = np.unique(labels).size
-    plt.scatter(points[:, 0], points[:, 1], c=labels,
-                cmap=plt.cm.get_cmap('jet', n_labels))
-    plt.savefig('embeddings')
-
-
 @ex.capture
 def train(dataset, method, lr, epochs, device_str, _run, link_prediction=False,
           seed=0, ckpt_name='model', edge_score='inner', plot_loss=False):
@@ -231,34 +140,11 @@ def train(dataset, method, lr, epochs, device_str, _run, link_prediction=False,
         best_auc = 0
         best_epoch = 0
 
-        # Sample positive and negative pairs for visualization
-        # num_samples = 100
-        # sample_idx = np.random.choice(range(train_pos.shape[1]), num_samples,
-        #                               replace=False)
-        # vis_pos = train_pos[:, sample_idx].numpy()
-        # vis_neg = train_neg[:, sample_idx].numpy()
-
-        # norms = np.zeros([epochs, dataset.num_nodes])
-
         for epoch in range(1, epochs + 1):
-            # embeddings = method.encoder(x, edge_index).detach().cpu().numpy()
-            # norms[epoch - 1] = np.linalg.norm(embeddings, axis=1)
-
-            # if epoch == epochs:
-            #     with torch.no_grad():
-            #         embeddings = method.embed(x, edge_index).detach().cpu()
-            #         # save_cloud_visualization(method, embeddings,
-            #         #                          vis_pos, vis_neg, epoch)
-            #         save_embedding_visualization(method, embeddings,
-            #                                      dataset.y.numpy())
-
             method.train()
             optimizer.zero_grad()
 
             pos_samples, neg_samples = next(train_iter)
-            # Use these to test that we can overfit:
-            # pos_samples = torch.tensor(vis_pos, dtype=torch.long)
-            # neg_samples = torch.tensor(vis_neg, dtype=torch.long)
             pos_samples = pos_samples.to(device)
             neg_samples = neg_samples.to(device)
             loss = method(x, edge_index, pos_samples, neg_samples)
@@ -293,14 +179,6 @@ def train(dataset, method, lr, epochs, device_str, _run, link_prediction=False,
                 time = datetime.now().strftime("%Y-%m-%d %H:%M")
                 log = '[{}] [{:03d}/{:03d}] train loss: {:.6f}'
                 print(log.format(time, epoch, epochs, loss.item()))
-
-        # norm_x = range(norms.shape[0])
-        # norm_mean = np.mean(norms, axis=1)
-        # norm_stdev = np.std(norms, axis=1)
-        # plt.plot(norm_x, norm_mean)
-        # plt.fill_between(norm_x, norm_mean - norm_stdev, norm_mean + norm_stdev,
-        #                  alpha=0.3)
-        # plt.savefig('norms')
 
         if not link_prediction and not isinstance(method.sampling_class, modgraph.FirstNeighborSampling):
             # Save the last state
@@ -547,6 +425,7 @@ def modular_search_node_class():
         study.save()
 
 
+@ex.command(unobserved=True)
 def load_modular_results(timestamp):
     import sherpa
 
@@ -559,40 +438,9 @@ def load_modular_results(timestamp):
         wait = input('Enter q to quit: ')
 
 
-load_modular_results = ex.command(load_modular_results, unobserved=True)
-
-
 @ex.command
-def parallel_trial(dataset_str, edge_score, lr, epochs, n_exper, device,
-                   timestamp, _run):
-    import sherpa
-
-    client = sherpa.Client()
-    trial = client.get_trial()
-
-    results = link_pred_experiments(dataset_str, **trial.parameters,
-                                    edge_score=edge_score, lr=lr,
-                                    epochs=epochs, train_node2vec=False,
-                                    n_exper=n_exper, device=device,
-                                    timestamp=timestamp)
-
-    # Compute mean across experiments,
-    # and reshape with one row per split (train/val/test)
-    results = np.mean(results, axis=0).reshape([3, 2])
-    # Objective is test_auc + test_ap
-    objective = float(np.sum(results[-1]))
-    client.send_metrics(trial, iteration=0, objective=objective,
-                        context={'train_auc': results[0, 0],
-                                 'val_auc': results[1, 0],
-                                 'test_auc': results[2, 0],
-                                 'train_ap': results[0, 1],
-                                 'val_ap': results[1, 1],
-                                 'test_ap': results[2, 1]})
-
-
-@ex.command
-def link_pred_experiments(dataset_str, encoder_str, dimensions, n_points, repr_str,
-                          loss_str, sampling_str, edge_score, lr,
+def link_pred_experiments(dataset_str, encoder_str, dimensions, n_points,
+                          repr_str, loss_str, sampling_str, edge_score, lr,
                           epochs, baseline, n_exper, device, timestamp,
                           _run):
     torch.random.manual_seed(0)
@@ -625,9 +473,10 @@ def link_pred_experiments(dataset_str, encoder_str, dimensions, n_points, repr_s
 
 
 @ex.command
-def node_class_experiments(dataset_str, encoder_str, repr_str, loss_str, sampling_str,
-                           dimensions, n_points, classifier, lr, epochs, baseline,
-                           p_labeled, n_exper, device, timestamp, _run):
+def node_class_experiments(dataset_str, encoder_str, repr_str, loss_str,
+                           sampling_str, dimensions, n_points, classifier, lr,
+                           epochs, baseline, p_labeled, n_exper, device,
+                           timestamp, _run):
     torch.random.manual_seed(0)
     np.random.seed(0)
     results = np.empty([n_exper, 2])
@@ -673,6 +522,5 @@ def node_class_experiments(dataset_str, encoder_str, repr_str, loss_str, samplin
     return results
 
 
-@ex.automain
-def stub():
-    return
+if __name__ == '__main__':
+    ex.run_commandline()

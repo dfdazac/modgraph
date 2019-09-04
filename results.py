@@ -7,6 +7,7 @@ from matplotlib import rc, rcParams
 import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.manifold import TSNE
+from sklearn.decomposition import PCA
 import networkx as nx
 from scipy.ndimage.filters import gaussian_filter1d
 from incense import ExperimentLoader
@@ -14,8 +15,6 @@ import pandas as pd
 
 from modgraph.utils import get_data, adj_from_edge_index
 
-# rcParams['font.family'] = 'sans-serif'
-# rcParams['font.sans-serif'] = ['Helvetica Neue']
 
 rcParams.update({'font.size': 11})
 rc('text', usetex=True)
@@ -186,44 +185,87 @@ def train_save_embeddings(method, dataset_str):
     np.save('emb_' + method, embeddings)
 
 
-def plot_embeddings(method, dataset_str):
-    embeddings = np.load('emb_' + method + '.npy')
-    data = get_data(dataset_str)
-    labels = data.y.numpy()
+def save_cloud_visualization(num_points, embeddings, vis_pos, vis_neg):
+    num_samples = embeddings.shape[0]
+
+    emb_dim = embeddings.shape[1] // num_points
+    points = embeddings.reshape(num_samples, num_points, -1).numpy()
+
+    means = points.mean(axis=1, keepdims=True)
+    distances = np.sqrt(np.sum((points - means) ** 2, axis=-1))
+    distances = distances.mean()
+
+    cloud_mean = points.reshape(-1, emb_dim).mean(axis=0, keepdims=True)
+    cloud_dists = np.sqrt(np.sum((points.reshape(-1, emb_dim) - cloud_mean)**2,
+                                 axis=-1))
+    cloud_dists = cloud_dists.mean()
+
+    print(f'Mean cloud variance: {distances:.6f}')
+    print(f'Total variance: {cloud_dists:.6f}')
+
+    node_idx = np.unique(np.concatenate((vis_pos, vis_neg), axis=1))
+    idx_to_pos = {idx: pos for pos, idx in enumerate(node_idx)}
+    points = points[node_idx]
+    if emb_dim > 2:
+        if emb_dim > 64:
+            reducer = TSNE(n_components=2, init='pca', random_state=0)
+        else:
+            reducer = PCA(n_components=2)
+
+        points = reducer.fit_transform(points.reshape(-1, emb_dim))
+    else:
+        points = points.reshape(-1, 2)
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(8, 4))
+    ax1.scatter(points[:, 0], points[:, 1], color='lightgray')
+    ax2.scatter(points[:, 0], points[:, 1], color='lightgray')
+
+    points = points.reshape(-1, num_points, 2)
+    colors = ['C0', 'C1', 'C2']
+    titles = ('Positive pairs', 'Negative pairs')
+
+    for ax, vis, title in zip((ax1, ax2), (vis_pos, vis_neg), titles):
+        for i, color in enumerate(colors):
+            cloud_a_idx = idx_to_pos[vis[0, i]]
+            cloud_a = points[cloud_a_idx]
+            ax.scatter(cloud_a[:, 0], cloud_a[:, 1], s=60, color=color,
+                       marker='o', edgecolors='k')
+
+            cloud_a_idx = idx_to_pos[vis[1, i]]
+            cloud_a = points[cloud_a_idx]
+            ax.scatter(cloud_a[:, 0], cloud_a[:, 1], s=60, color=color,
+                       marker='X', edgecolors='k')
+
+        ax.set_axis_on()
+        ax.set_title(title)
+
+    fig.savefig('cloud')
+
+
+def save_embedding_visualization(method, embeddings, labels):
+    num_samples = embeddings.shape[0]
+    if hasattr(method.representation, 'n_points'):
+        num_points = method.representation.n_points
+    else:
+        num_points = 1
+
+    emb_dim = embeddings.shape[1] // num_points
+    points = embeddings.reshape(num_samples, num_points, -1).numpy()
+
+    if emb_dim > 2:
+        if emb_dim > 64:
+            reducer = TSNE(n_components=2, init='pca', random_state=0)
+        else:
+            reducer = PCA(n_components=2)
+
+        points = reducer.fit_transform(points.reshape(-1, emb_dim))
+    else:
+        points = points.reshape(-1, 2)
+
     n_labels = np.unique(labels).size
-    graph = nx.from_scipy_sparse_matrix(adj_from_edge_index(data.edge_index,
-                                                            data.num_nodes))
-    y = data.y.numpy()
-
-    z = TSNE(n_components=2).fit_transform(embeddings)
-    pos = {i: z_i for i, z_i in enumerate(z)}
-    fig, ax = plt.subplots()
-    nx.draw(graph, pos, node_size=50, node_color=y, ax=ax,
-            cmap=plt.cm.get_cmap('jet', n_labels), edge_color='silver')
-    ax.set_axis_on()
-    fig.savefig('fig_' + method)
-    plt.cla()
-
-
-def plot_sge_embeddings(dataset_str):
-    embs = np.load('emb_sge.npy')
-    n_nodes, n_points, emb_dim = embs.shape
-    data = get_data(dataset_str)
-    labels = data.y.numpy()
-    n_labels = np.unique(labels).size
-    y = np.expand_dims(data.y.numpy(), axis=1)
-
-    embs = embs.reshape(n_nodes * n_points, emb_dim)
-    labels = np.tile(np.ones_like(y) * y, [1, n_points])
-    labels = labels.reshape(n_nodes * n_points)
-
-    fig, ax = plt.subplots()
-    ax.scatter(embs[:, 0], embs[:, 1], c=labels,
-               cmap=plt.cm.get_cmap('jet', n_labels))
-
-    ax.set_axis_on()
-    fig.savefig('fig_sge')
-    plt.cla()
+    plt.scatter(points[:, 0], points[:, 1], c=labels,
+                cmap=plt.cm.get_cmap('jet', n_labels))
+    plt.savefig('embeddings')
 
 
 def plot_adjacency(method, dataset_str):
