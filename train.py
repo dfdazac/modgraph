@@ -61,8 +61,6 @@ def build_method(encoder_str, num_features, dimensions, n_points, repr_str,
         representation = modgraph.GaussianVariational()
     elif repr_str == 'spherical_variational':
         representation = modgraph.HypersphericalVariational()
-    elif repr_str == 'point_cloud':
-        representation = modgraph.PointCloud(n_points)
     elif repr_str == 'gaussian_flow':
         representation = modgraph.GaussianFlow(in_features=emb_dim)
     else:
@@ -291,38 +289,39 @@ def config():
     encoder_str (str): {'mlp', 'gcn', 'gcnmlp'}
     repr_str (str): {'euclidean_inner', 'euclidean_infomax', 'gaussian',
                      'euclidean_distance'}
-    loss_str (str): {'bce_loss', 'square_exponential'}
+    loss_str (str): {'bce_loss', 'square_exponential_loss',
+                     'hinge_loss', 'square_square_loss'}
     sampling_str (str): {'first_neighbors', 'ranked', 'graph_corruption'}
     dimensions (list): List with number of units in each layer of the encoder
     edge_score (str): scoring function used for link prediction. One of
         {'inner', 'bilinear'}
     lr (float): learning rate
     epochs (int): number of epochs for training
-    train_node2vec (bool): if True, ignore method and train with node2vec
+    baseline (str): None, or in {'raw', 'node2vec', 'svd'}
     p_labeled (float): percentage of labeled nodes used for node classification
     n_exper (int): number of experiments to repeat with different random seeds
+    plot_loss (bool: add loss curves to logs during training
     device (str): one of {'cpu', 'cuda'}
     timestamp (str): unique identifier for a set of experiments
     """
     dataset_str = 'cora'
 
-    encoder_str = 'gcn'
-    repr_str = 'gaussian_flow'
-    loss_str = 'bce_loss'
+    encoder_str = 'sgc'
+    repr_str = 'euclidean_inner'
+    loss_str = 'hinge_loss'
     sampling_str = 'first_neighbors'
 
     dimensions = [256, 128]
     n_points = 4
     edge_score = 'inner'
-    classifier = 'set'
+    classifier = 'logreg'
     lr = 0.001
-    epochs = 2000
+    epochs = 200
 
-    # FIXME: add to all methods
     baseline = None
 
     p_labeled = 0.1
-    n_exper = 20
+    n_exper = 1
     plot_loss = False
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     timestamp = str(int(datetime.now().timestamp()))

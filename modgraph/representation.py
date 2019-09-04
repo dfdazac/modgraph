@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch_geometric.nn.inits import glorot
-from geomloss import SamplesLoss
 from torch.distributions.kl import kl_divergence
 import numpy as np
 
@@ -369,16 +368,10 @@ class HypersphericalVariational(Representation):
 
 class PointCloud(Representation):
     def __init__(self, n_points):
-        self.sinkhorn = SamplesLoss('sinkhorn', p=1, blur=0.05, diameter=10)
-        self.n_points = n_points
+        raise NotImplementedError
 
     def score(self, z, pairs):
-        num_nodes = z.shape[0]
-        points = z.reshape(num_nodes, self.n_points, -1)
-        nodes_x, nodes_y = pairs
-        result = -self.sinkhorn(points[nodes_x], points[nodes_y])
-
-        return result
+        raise NotImplementedError
 
     def score_link_pred(self, z, pairs):
-        return self.score(z, pairs)
+        raise NotImplementedError

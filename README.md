@@ -63,7 +63,7 @@ embeddings, results = train(dataset, method)
 ```
 
 
-### Instructions
+### Installation
 
 Create a conda environment with all the requirements (edit `environment.yml` if you want to change the name of the environment):
 
@@ -85,16 +85,45 @@ python train.py print_config
 
 Two commands are available: `link_pred_experiments` and `node_class_experiments`.
 
-**Example**
+## Running the experiments
 
-To train GAE and evaluate it in the link prediction task using the Cora dataset, run
+The default settings train our best method (EB-GAE) on the link prediction task with the Cora dataset:
 
 ```sh
-python train.py with dataset_str='cora' \
-encoder_str='gcn' \
-repr_str='euclidean_inner' \
-loss_str='bce_loss' \
-sampling_str='first_neighbors' \
-n_exper=1
+python train.py link_pred_experiments
 ```
 
+Other methods can be evaluated as well:
+
+GAE
+
+```sh
+python train.py link_pred_experiments \
+    with dataset_str='cora' \
+    encoder_str='gcn' \
+    repr_str='euclidean_inner' \
+    loss_str='bce_loss' \
+    sampling_str='first_neighbors'
+```
+
+DGI
+
+```sh
+python train.py link_pred_experiments \
+    with dataset_str='cora' \
+    encoder_str='gcn' \
+    repr_str='euclidean_infomax' \
+    loss_str='bce_loss' \
+    sampling_str='graph_corruption'
+```
+
+Graph2Gauss
+
+```sh
+python train.py link_pred_experiments \
+    with dataset_str='cora' \
+    encoder_str='mlp' \
+    repr_str='gaussian' \
+    loss_str='square_exponential_loss' \
+    sampling_str='ranked'
+```
