@@ -1,4 +1,3 @@
-import sys
 import itertools
 from torch_geometric.datasets import Planetoid
 from .gnnbench import GNNBenchmark
@@ -219,25 +218,6 @@ def link_prediction_scores(pos_score, neg_score):
     ap_score = average_precision_score(targets, preds)
 
     return auc_score, ap_score
-
-
-def plot_pr_curve(pos_score, neg_score, label):
-    import matplotlib.pyplot as plt
-
-    preds = torch.cat((pos_score, neg_score)).detach().cpu().numpy()
-
-    targets = torch.cat((torch.ones_like(pos_score),
-                         torch.zeros_like(neg_score))).cpu().numpy()
-
-    precision, recall, thresholds = precision_recall_curve(targets, preds)
-
-    plt.step(recall, precision, where='post', label=label)
-    plt.ylabel('Precision')
-    plt.xlabel('Recall')
-    plt.legend()
-    plt.savefig('prec_recall')
-
-    return
 
 
 def build_data(emb, edges_pos, edges_neg):

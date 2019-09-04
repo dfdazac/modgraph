@@ -61,6 +61,8 @@ def build_method(encoder_str, num_features, dimensions, n_points, repr_str,
         representation = modgraph.GaussianVariational()
     elif repr_str == 'spherical_variational':
         representation = modgraph.HypersphericalVariational()
+    elif repr_str == 'point_cloud':
+        representation = modgraph.PointCloud(n_points)
     elif repr_str == 'gaussian_flow':
         representation = modgraph.GaussianFlow(in_features=emb_dim)
     else:
